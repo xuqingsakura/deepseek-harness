@@ -38,3 +38,12 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+
+# Desktop deployment/build leftovers (not source).
+apps/desktop/out/
+apps/desktop/dist-installer/
+apps/desktop/dist-pkg/
+apps/desktop/.dsh-home/
+apps/desktop/runtime/
+apps/desktop/build/
+apps/desktop/*.log

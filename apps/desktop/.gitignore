@@ -1,0 +1,7 @@
+node_modules/
+lib/
+*.tsbuildinfo
+.dsh-home/
+.smoke.png
+# One-off dev patch scripts (not shipped).
+scripts/archive/

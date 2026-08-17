@@ -4,9 +4,9 @@
  * empty-root composition, and the installation module-fallback healing.
  */
 
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   composeEntries,
@@ -129,6 +129,8 @@ describe('loadProfile', () => {
     writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: a\n  config:\n    v: 3\n')
     const profile = loadProfile('t', 'demo', anchor, home)
     expect(profile.layers.map(layer => layer.packageName)).toEqual(['bundle-a', 'bundle-b'])
+
+
     expect(profile.patches).toHaveLength(1)
     const entries = composeEntries([
       ...profile.layers.map(layer => layer.patches),
@@ -141,6 +143,19 @@ describe('loadProfile', () => {
     writeProfileManifest(dir, { name: 'bare' })
     const bare = loadProfile('t', 'demo', anchor, home)
     expect(bare.layers).toEqual([])
+  })
+
+  it('projects the manifest disabled list for row-level boot disablement', () => {
+    const anchor = stageInstallation({})
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    initProfile(dir, [])
+    const manifest = readProfileManifest('t', dir)
+    manifest.dsh = manifest.dsh ?? { profile: {} }
+    manifest.dsh.profile = manifest.dsh.profile ?? {}
+    manifest.dsh.profile.disabled = ['bundle-b']
+    writeProfileManifest(dir, manifest)
+    expect(loadProfile('t', 'demo', anchor, home).disabled).toEqual(['bundle-b'])
   })
 
   it('auto-initializes only shipped templates and fails loud otherwise', () => {
@@ -256,17 +271,50 @@ describe('healProfilesModuleFallback', () => {
     expect(readlinkSync(join(fallback, 'dsh-app'))).toContain('app')
   })
 
-  it('tolerates losing the concurrent-heal race to an identical link and rejects a different one', () => {
-    // The EEXIST arm: a second process wrote the link between our lstat miss
-    // and symlinkSync. Simulated by pre-creating the correct link and calling
-    // the internal path through a stale-lstat shim is not possible from
-    // outside, so probe the observable contract: healing twice concurrently
-    // is a no-op, and a foreign REAL directory still fails loud.
-    const anchor = stageInstallation({})
+  it('skips the heal on a warm boot when the recorded stamp matches', () => {
+    const anchor = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
     const home = tmp()
     healProfilesModuleFallback(anchor, home)
-    healProfilesModuleFallback(anchor, home) // second healer sees the correct link
     const fallback = join(home, 'profiles', 'node_modules')
-    expect(lstatSync(join(fallback, 'dsh-app')).isSymbolicLink()).toBe(true)
+    const link = join(fallback, 'bundle-a')
+    unlinkSync(link) // simulate a lost link after a completed heal
+    healProfilesModuleFallback(anchor, home)
+    // The matching stamp skips the closure walk: the lost link is NOT recreated.
+    expect(() => lstatSync(link)).toThrow()
+  })
+
+  it('re-heals when the dependency set changes (new package added)', () => {
+    const anchor = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
+    const home = tmp()
+    healProfilesModuleFallback(anchor, home)
+    const manifest = JSON.parse(readFileSync(anchor, 'utf8')) as { dependencies: Record<string, string> }
+    manifest.dependencies['new-pkg'] = '0.0.0'
+    writeFileSync(anchor, JSON.stringify(manifest))
+    const modules = join(anchor, '..', 'node_modules')
+    mkdirSync(join(modules, 'new-pkg'), { recursive: true })
+    writeFileSync(join(modules, 'new-pkg', 'package.json'), JSON.stringify({ name: 'new-pkg', version: '0.0.0' }))
+    healProfilesModuleFallback(anchor, home)
+    expect(lstatSync(join(home, 'profiles', 'node_modules', 'new-pkg')).isSymbolicLink()).toBe(true)
+  })
+
+  it('re-heals and re-points links when the installation moves to a new path', () => {
+    const anchor = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
+    const moved = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
+    const home = tmp()
+    healProfilesModuleFallback(anchor, home)
+    healProfilesModuleFallback(moved, home)
+    const fallback = join(home, 'profiles', 'node_modules')
+    expect(readlinkSync(join(fallback, 'bundle-a'))).toContain(join(dirname(moved), 'node_modules', 'bundle-a'))
+  })
+
+  it('re-heals when the stamp file is corrupted', () => {
+    const anchor = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
+    const home = tmp()
+    healProfilesModuleFallback(anchor, home)
+    const fallback = join(home, 'profiles', 'node_modules')
+    writeFileSync(join(fallback, '.dsh-heal-stamp'), 'garbage')
+    unlinkSync(join(fallback, 'bundle-a'))
+    healProfilesModuleFallback(anchor, home)
+    expect(lstatSync(join(fallback, 'bundle-a')).isSymbolicLink()).toBe(true)
   })
 })

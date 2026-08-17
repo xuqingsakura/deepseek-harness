@@ -1,0 +1,339 @@
+.panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.title {
+  flex: none;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.action {
+  margin-left: auto;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: 12px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.moreButton {
+  flex: none;
+  width: 26px;
+  height: 24px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.moreButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.moreButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.branchRow {
+  flex: none;
+  display: flex;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.error {
+  flex: none;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.hint {
+  padding: 12px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.listCol {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.groupHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 2px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+
+.groupHeader:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.groupArrow {
+  flex: none;
+  width: 10px;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kindBadge {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.kindBadge[data-kind='added'],
+.kindBadge[data-kind='untracked'] {
+  color: var(--dsw-static-green-500);
+}
+
+.kindBadge[data-kind='modified'],
+.kindBadge[data-kind='renamed'] {
+  color: var(--dsw-static-amber-500);
+}
+
+.kindBadge[data-kind='deleted'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.rowActions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.rowAction,
+.rowActionDanger {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rowAction:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.rowActionDanger:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.bottom {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.select {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: 12px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.commitInput {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: 12px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  outline: none;
+}
+
+.commitInput::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.commitButton {
+  width: 100%;
+  height: 26px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-inverted);
+  font: 12px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+
+.commitButton:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover);
+}
+
+.commitButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.history {
+  flex: none;
+  height: 132px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.historyHeader {
+  flex: none;
+  padding: 5px 10px 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.historyList {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+  overflow: auto;
+}
+
+.historyRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px;
+}
+
+.historyHash {
+  flex: none;
+  color: var(--dsw-static-deepseek-500);
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.historyMessage {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+}
+
+.historyAuthor {
+  flex: none;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}

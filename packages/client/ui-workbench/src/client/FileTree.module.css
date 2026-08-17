@@ -1,0 +1,133 @@
+.tree {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.rowActive {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  width: 14px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.chevronSpacer {
+  width: 14px;
+  flex: none;
+}
+
+.folder {
+  color: var(--dsw-alias-label-primary);
+}
+
+.file {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.hint {
+  padding: 8px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.hintRow {
+  padding: 2px 8px 2px 22px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-overlay);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuItem,
+.menuItemDanger {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: 12px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.menuItemDanger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.menuItemDanger:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.menuError {
+  padding: 4px 10px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  word-break: break-all;
+  max-width: 220px;
+}

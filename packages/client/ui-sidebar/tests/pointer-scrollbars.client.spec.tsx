@@ -31,9 +31,12 @@ afterEach(() => {
 function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   const view = render(
     <SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} view="default"
       useSessions={neverHook} useWorkspaces={neverHook}
-      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      startSession={vi.fn()} toggleSidebar={vi.fn()}
+      setSidebarView={vi.fn()}
+      workbenchAvailable={() => false} subscribeWorkbench={() => () => {}}
+      t={t}
       renderSlot={((_key: string, owner: SidebarSectionOwnerProps) =>
         <div data-testid="region" data-wide={owner.wide} />) as SidebarRootComponentProps['renderSlot']}
     />,

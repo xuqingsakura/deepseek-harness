@@ -1,0 +1,22 @@
+{
+  "name": "dsh-skin-aurora",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Aurora skin: brand-token palette override for the DeepSeek Harness web UI (official dsh.bundle + dsh.client plugin shape)",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}

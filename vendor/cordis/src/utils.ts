@@ -85,7 +85,12 @@ export function isConstructor(func: any): func is new (...args: any) => any {
   if (func instanceof GeneratorFunction) return false
   // polyfilled AsyncGeneratorFunction === Function
   if (AsyncGeneratorFunction !== Function && func instanceof AsyncGeneratorFunction) return false
-  return true
+  // Only a class definition (its toString starts with "class") is
+  // constructed. Every other callable-with-prototype shape is a plain
+  // function plugin and must be invoked: constructing it replaces the
+  // returned disposer with a fresh instance, silently dropping cleanup
+  // (whale-girl's client apply hit exactly this).
+  return /^class(?:\s|{)/.test(Function.prototype.toString.call(func))
 }
 
 /** Merge two prototype chains while preserving descriptors from `proto1`. */

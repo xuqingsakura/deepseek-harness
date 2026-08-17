@@ -71,6 +71,28 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
     /**
+     * The workbench file viewer/editor column, shown in the CENTER column
+     * while the workbench sidebar view is active (the conversation moves to
+     * the right details column). Declared by this package's 'root' entry;
+     * ui-workbench registers the file viewer. Root-scoped like the file tree:
+     * the occupant resolves the bound session through its own inject face, so
+     * the seat renders regardless of the strict-session outlet state.
+     *
+     * No owner props: the registrant supplies business data through its
+     * inject face, and ctx.layout owns whether the view is active.
+     */
+    'workbench.viewer': { kind: 'single'; scope: 'root'; owner: WorkbenchViewerOwnerProps }
+    /**
+     * The bottom terminal strip, shown in the frame's bottom row while the
+     * layout opens it (VSCode-style terminal panel). Declared by this
+     * package's 'root' entry; ui-workbench registers the terminal. Root-scoped
+     * like the viewer: the occupant resolves the bound session through its own
+     * inject face.
+     *
+     * Owner prop: the rendered bottom height in px (drag live value).
+     */
+    'workbench.bottom': { kind: 'single'; scope: 'root'; owner: WorkbenchBottomOwnerProps }
+    /**
      * Frame-wide floating layer, above every column and outside their scroll
      * containers. Deliberately generic and unowned by any feature: a badge, a
      * toast stack or a status pill all belong here, and entries order among
@@ -96,6 +118,8 @@ export interface SidebarOwnerProps {
   collapsed: boolean
   /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */
   width: number
+  /** Active sidebar view: the default workspace browser or the workbench file tree. */
+  view: 'default' | 'workbench'
 }
 
 /** Conversation owner share: business state and actions belong to the registrant. */
@@ -103,6 +127,16 @@ export interface ConvOwnerProps {}
 
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
+
+/** Workbench viewer owner share: empty — sessionId arrives as a framework-standard prop. */
+export interface WorkbenchViewerOwnerProps {}
+
+/** Workbench bottom owner share: the frame's rendered bottom height. */
+export interface WorkbenchBottomOwnerProps {
+  /** Rendered bottom-panel height in px. */
+  height: number
+}
+
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
 export const inject = ['slots', 'theme']
@@ -123,6 +157,8 @@ export function apply(ctx: ClientContext): void {
         'sidebar': { kind: 'single', scope: 'root' },
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
+        'workbench.viewer': { kind: 'single', scope: 'root' },
+        'workbench.bottom': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per

@@ -1,0 +1,22 @@
+{
+  "name": "@deepseek-ai/dsh-desktop",
+  "description": "Windows desktop shell for the DeepSeek Harness Web GUI",
+  "version": "0.1.0-rc.49",
+  "private": true,
+  "type": "module",
+  "main": "lib/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "electron .",
+    "smoke": "pnpm run build && electron . --smoke",
+    "dev": "pnpm run build && pnpm run start"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "43.4.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

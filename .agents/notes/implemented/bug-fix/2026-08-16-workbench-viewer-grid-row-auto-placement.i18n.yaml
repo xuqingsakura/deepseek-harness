@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-16-workbench-viewer-grid-row-auto-placement.md
+2026-08-16-workbench-viewer-grid-row-auto-placement.md: 301c90bf9eab53f0bb30e5e70b0ec0ab42410fc8
+2026-08-16-workbench-viewer-grid-row-auto-placement.zh.md: 56f77d3994533b01e10f3f3fbfd777f6e59ff0a6

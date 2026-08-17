@@ -19,7 +19,7 @@ beforeEach(() => { localStorage.clear() })
 describe('createLayoutStore', () => {
   it('initializes the sidebar at its default width, details closed, wide viewport assumed', () => {
     const { store } = createLayoutStore().create()
-    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false })
+    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, bottom: 0, sidebarView: 'default', narrow: false, narrowExpanded: false })
   })
 
   it('each create() is an independent instance (factory is not a singleton)', () => {
@@ -50,12 +50,24 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().sidebar).toBe(SIDEBAR_DEFAULT)
   })
 
+  it('toggleSidebar in the workbench view restores the workbench width, not the browser default', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebarView('workbench')
+    const opened = store.getSnapshot().sidebar
+    expect(opened).toBeGreaterThan(0)
+    actions.toggleSidebar()
+    expect(store.getSnapshot().sidebar).toBe(0)
+    actions.toggleSidebar()
+    expect(store.getSnapshot().sidebar).toBe(opened)
+    expect(store.getSnapshot().sidebar).not.toBe(SIDEBAR_DEFAULT)
+  })
+
   it('narrow toggleSidebar flips only the re-expand override; the width preference survives', () => {
     const { store, actions } = createLayoutStore().create()
     actions.setSidebar(400)
     actions.setNarrow(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, bottom: 0, sidebarView: 'default', narrow: true, narrowExpanded: true })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
     expect(store.getSnapshot().sidebar).toBe(400)
@@ -85,6 +97,48 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().details).toBe(0)
   })
 
+  it('openWorkbench switches the sidebar view, sizes the tree column, and opens the conversation column; closeWorkbench restores browsing', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebar(300)
+    actions.openWorkbench()
+    expect(store.getSnapshot().sidebarView).toBe('workbench')
+    expect(store.getSnapshot().sidebar).toBeGreaterThan(SIDEBAR_DEFAULT)
+    expect(store.getSnapshot().details).toBeGreaterThan(0)
+    actions.closeWorkbench()
+    expect(store.getSnapshot().sidebarView).toBe('default')
+    expect(store.getSnapshot().sidebar).toBe(SIDEBAR_DEFAULT)
+    expect(store.getSnapshot().details).toBe(0)
+  })
+
+  it('openWorkbench expands a collapsed sidebar and opens the conversation column', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.toggleSidebar()
+    expect(store.getSnapshot().sidebar).toBe(0)
+    actions.openWorkbench()
+    expect(store.getSnapshot().sidebarView).toBe('workbench')
+    expect(store.getSnapshot().sidebar).toBeGreaterThan(0)
+    expect(store.getSnapshot().details).toBeGreaterThan(0)
+  })
+
+  it('setSidebarView switches between views, opening/closing the conversation column, and toggles the active view panel', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebarView('workbench')
+    expect(store.getSnapshot().sidebarView).toBe('workbench')
+    expect(store.getSnapshot().details).toBeGreaterThan(0)
+    // Clicking the active view's icon collapses the tree panel (conversation column stays open).
+    actions.setSidebarView('workbench')
+    expect(store.getSnapshot().sidebar).toBe(0)
+    expect(store.getSnapshot().details).toBeGreaterThan(0)
+    // Re-clicking re-expands it.
+    actions.setSidebarView('workbench')
+    expect(store.getSnapshot().sidebar).toBeGreaterThan(0)
+    // Switching to the browser closes the conversation column.
+    actions.setSidebarView('default')
+    expect(store.getSnapshot().sidebarView).toBe('default')
+    expect(store.getSnapshot().details).toBe(0)
+    expect(store.getSnapshot().sidebar).toBe(SIDEBAR_DEFAULT)
+  })
+
   it('does not persist panel geometry', () => {
     const first = createLayoutStore().create()
     first.actions.setSidebar(400)
@@ -96,6 +150,8 @@ describe('createLayoutStore', () => {
     expect(second.store.getSnapshot()).toEqual({
       sidebar: SIDEBAR_DEFAULT,
       details: 0,
+      bottom: 0,
+      sidebarView: 'default',
       narrow: false,
       narrowExpanded: false,
     })

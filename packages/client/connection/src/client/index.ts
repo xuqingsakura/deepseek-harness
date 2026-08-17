@@ -8,7 +8,8 @@ import type { HostDescription, IApiClient } from './api.ts'
 import { ConnectionController, type ConnectionConfig, type ConnectionSinks, type ConnectionState } from './connection.ts'
 import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
-import { createWebConnectionRpc } from './rpc.ts'
+import { ElectronApiClient } from './electron-api-client.ts'
+import { createElectronConnectionRpc, createWebConnectionRpc } from './rpc.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
@@ -85,8 +86,12 @@ export function apply(ctx: Context): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureClient = fixture ? new FixtureApiClient() : undefined
-  const api: IApiClient = fixtureClient ?? new WebApiClient()
-  const rpc = fixtureClient?.rpc ?? createWebConnectionRpc()
+  // Electron renders the same shell through the preload bridge: when
+  // `window.dshDesktop` exists, all wire traffic rides IPC instead of the
+  // browser's HTTP/WebSocket transport (see electron-api-client.ts).
+  const electron = typeof (globalThis as { dshDesktop?: unknown }).dshDesktop !== 'undefined'
+  const api: IApiClient = fixtureClient ?? (electron ? new ElectronApiClient() : new WebApiClient())
+  const rpc = fixtureClient?.rpc ?? (electron ? createElectronConnectionRpc() : createWebConnectionRpc())
   let started = false
   let description: HostDescription | undefined
   const descriptionListeners = new Set<() => void>()

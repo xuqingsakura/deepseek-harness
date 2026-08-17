@@ -61,6 +61,8 @@ function mountFrame() {
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
     if (key === 'conversation') return <div data-testid="center-content" />
     if (key === 'details') return <div data-testid="details-content" />
+    if (key === 'workbench.viewer') return <div data-testid="viewer-content" />
+    if (key === 'workbench.bottom') return <div data-testid="bottom-content" />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
@@ -154,6 +156,64 @@ describe('AppFrame', () => {
     expect(slotCalls.find(c => c.key === 'details')!.props).toEqual({})
   })
 
+  it('workbench view swaps the center/details roles and opens the conversation column', () => {
+    const { frame, instance, queryByTestId } = mountFrame()
+    // The frame's column order is sidebar | center | details; the conversation
+    // keeps the center column node in BOTH views (CSS grid-column reorders it
+    // to the right track while the workbench is open).
+    const columnAt = (index: number) => frame.children[index] as HTMLElement
+    expect(frame.hasAttribute('data-workbench')).toBe(false)
+    expect(columnAt(1).querySelector('[data-testid="center-content"]')).toBeTruthy()
+    expect(columnAt(2).querySelector('[data-testid="details-content"]')).toBeTruthy()
+
+    act(() => { instance.actions.openWorkbench() })
+    // Tree column 300 + conversation column 480; the frame template keeps the
+    // three-track shape (sidebar | center | details).
+    expect(frame.hasAttribute('data-workbench')).toBe(true)
+    expect(tracks(frame)).toEqual([300, 480])
+    // The conversation stays in the center column node (moved to the right
+    // track via CSS), and the viewer fills the details column node (moved to
+    // the center track) — never the other way around.
+    expect(columnAt(1).querySelector('[data-testid="center-content"]')).toBeTruthy()
+    expect(columnAt(2).querySelector('[data-testid="viewer-content"]')).toBeTruthy()
+    expect(queryByTestId('details-content')).toBeNull()
+
+    act(() => { instance.actions.closeWorkbench() })
+    expect(frame.hasAttribute('data-workbench')).toBe(false)
+    expect(tracks(frame)).toEqual([280, 0])
+    expect(queryByTestId('viewer-content')).toBeNull()
+    expect(columnAt(2).querySelector('[data-testid="details-content"]')).toBeTruthy()
+  })
+
+  it('workbench conversation column stays open even when the session blank flag is unset', () => {
+    // A blank (or blank-flag-unset) session makes the tool-details session
+    // gate report undefined; the workbench conversation column must NOT be
+    // collapsed by that gate.
+    selectedSessionBlank.current = true
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.openWorkbench() })
+    expect(frame.hasAttribute('data-workbench')).toBe(true)
+    expect(tracks(frame)).toEqual([300, 480])
+  })
+
+  it('workbench view drags both handles: tree width and conversation width', () => {
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.openWorkbench() })
+    expect(tracks(frame)).toEqual([300, 480])
+    const handles = frame.querySelectorAll('[class*="handle"]')
+    expect(handles).toHaveLength(2)
+
+    // The sidebar handle resizes the file-tree column.
+    drag(handles[0]!, 300, 360)
+    expect(instance.getSnapshot().sidebar).toBe(360)
+
+    // The details handle resizes the conversation column (dragging it left
+    // widens the conversation).
+    const detailsLeft = 1920 - 480
+    drag(handles[1]!, detailsLeft, detailsLeft - 40)
+    expect(instance.getSnapshot().details).toBe(520)
+  })
+
   it('keeps the conversation slot mounted while no session is current', () => {
     // No current session: the session-maybe conversation shell owns the New
     // Session view itself — the center column renders it unconditionally.
@@ -216,7 +276,7 @@ describe('AppFrame', () => {
 
   it('sidebar slot receives live concession output as owner props', () => {
     const { slotCalls } = mountFrame()
-    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ collapsed: false, width: 280 })
+    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ collapsed: false, width: 280, view: 'default' })
   })
 
   it('sidebar drag widens through rAF-batched pointer moves', () => {
@@ -258,7 +318,7 @@ describe('AppFrame', () => {
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
     const lastSidebarCall = slotCalls.filter(c => c.key === 'sidebar').at(-1)!
-    expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
+    expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED, view: 'default' })
   })
 
   it('viewport shrink triggers the concession chain via ResizeObserver', () => {
@@ -290,7 +350,7 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     const { frame, slotCalls } = mountFrame()
     expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
-    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED, view: 'default' })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
   })
 
@@ -395,4 +455,48 @@ describe('AppFrame — unmount with an in-flight resize frame', () => {
     act(() => { fireResize?.(); fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([280, 330])
   })
+
+  describe('AppFrame — bottom terminal panel', () => {
+    it('stays closed by default (no bottom row, no vertical handle)', () => {
+      const { frame, slotCalls } = mountFrame()
+      expect(frame.querySelectorAll('[class*="bottomRow"]')).toHaveLength(0)
+      expect(frame.querySelectorAll('[class*="verticalHandle"]')).toHaveLength(0)
+      expect(slotCalls.filter(call => call.key === 'workbench.bottom')).toHaveLength(0)
+    })
+
+    it('toggleBottom renders the bottom row with the workbench.bottom slot and a vertical handle', () => {
+      const { frame, instance, slotCalls } = mountFrame()
+      act(() => { instance.actions.toggleBottom() })
+      expect(frame.querySelectorAll('[class*="bottomRow"]')).toHaveLength(1)
+      expect(frame.querySelectorAll('[class*="verticalHandle"]')).toHaveLength(1)
+      expect(frame.hasAttribute('data-bottom-collapsed')).toBe(false)
+      expect(frame.style.gridTemplateRows).toMatch(/minmax\(0, 1fr\) \d+px$/)
+      const bottomCalls = slotCalls.filter(call => call.key === 'workbench.bottom')
+      expect(bottomCalls.length).toBeGreaterThan(0)
+    })
+
+    it('vertical drag adjusts the bottom height within the clamp range', () => {
+      const { frame, instance } = mountFrame()
+      act(() => { instance.actions.toggleBottom() })
+      const handle = frame.querySelectorAll('[class*="verticalHandle"]')[0]!
+      // frame height is 1080 in the stub; dragging up 60px grows the panel.
+      const down = new PointerEvent('pointerdown', { pointerId: 3, clientY: 880, bubbles: true })
+      const move = new PointerEvent('pointermove', { pointerId: 3, clientY: 820, bubbles: true })
+      const up = new PointerEvent('pointerup', { pointerId: 3, clientY: 820, bubbles: true })
+      act(() => { handle.dispatchEvent(down) })
+      act(() => { handle.dispatchEvent(move); vi.advanceTimersByTime(20) })
+      act(() => { handle.dispatchEvent(up) })
+      expect(instance.getSnapshot().bottom).toBeGreaterThan(0)
+      expect(frame.style.gridTemplateRows).toMatch(/minmax\(0, 1fr\) \d+px$/)
+    })
+
+    it('toggleBottom again closes the panel', () => {
+      const { frame, instance } = mountFrame()
+      act(() => { instance.actions.toggleBottom() })
+      act(() => { instance.actions.toggleBottom() })
+      expect(frame.querySelectorAll('[class*="bottomRow"]')).toHaveLength(0)
+      expect(instance.getSnapshot().bottom).toBe(0)
+    })
+  })
+
 })

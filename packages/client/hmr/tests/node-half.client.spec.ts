@@ -3,6 +3,7 @@
  * report through clientModuleHost.rebuilt, and everything dies with the fiber.
  */
 import { mkdtempSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -199,6 +200,38 @@ describe('hmr node half', () => {
     const fiber = await mount(clientModuleHost, fakeHttpServer([]))
 
     await vi.waitFor(() => { expect(clientModuleHost.rebuiltCalls).toEqual(['pkg-a', 'pkg-a']) }, { timeout: 3_000 })
+    await fiber.dispose()
+  })
+
+  it('broadcasts the authoritative graph frame to connected SSE clients on graph changes', async () => {
+    const bundle = join(dir, 'g.js')
+    writeFileSync(bundle, 'v1')
+    const rows = new Map([['pkg-a', bundle]])
+    const clientModuleHost = fakeClientModuleHost(rows)
+    const routes: WebRoute[] = []
+    const fiber = await mount(clientModuleHost, fakeHttpServer(routes))
+
+    const route = routes.find(r => r.kind === 'exact' && r.path === EVENTS_ENDPOINT)
+    expect(route).toBeDefined()
+    const writes: string[] = []
+    const res = {
+      writeHead: () => {},
+      write: (chunk: string) => { writes.push(chunk); return true },
+      on: () => res,
+      once: () => res,
+      destroy: () => {},
+    } as unknown as ServerResponse
+    await route!.handler({ method: 'GET' } as IncomingMessage, res)
+    writes.length = 0
+
+    const late = join(dir, 'late-g.js')
+    writeFileSync(late, 'v1')
+    rows.set('pkg-late', late)
+    clientModuleHost.fireGraphChanged()
+
+    const frame = writes.join('')
+    expect(frame).toContain('"type":"graph"')
+    expect(frame).toContain('pkg-late')
     await fiber.dispose()
   })
 })

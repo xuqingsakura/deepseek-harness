@@ -103,7 +103,7 @@ export function prepareProfile(name: string, userLayer = true): Profile {
 }
 
 /** One profile's patch layers (application order) and the row index of its pre-flag composition. */
-interface ComposedProfile {
+export interface ComposedProfile {
   profile: Profile
   /** Bundle layers concatenated — the part below the user layers on a live reload. */
   bundlePatches: PatchOptions[]
@@ -118,8 +118,12 @@ interface ComposedProfile {
   rows: ReadonlyMap<string, EntryOptions>
 }
 
-/** The full patch stack of one composed profile, in application order. */
-function allPatches(composed: ComposedProfile): PatchOptions[] {
+/**
+ * The full patch stack of one composed profile, in application order.
+ * @param composed - the composed profile whose layers to concatenate.
+ * @returns the patch layers in application order.
+ */
+export function allPatches(composed: ComposedProfile): PatchOptions[] {
   return [
     ...composed.bundlePatches,
     ...composed.profile.patches,
@@ -139,7 +143,7 @@ function allPatches(composed: ComposedProfile): PatchOptions[] {
  * @param patchFiles - `--patch` overlay paths, in argv order.
  * @returns the profile, its patch layers, and the composed row index.
  */
-function composeProfile(
+export function composeProfile(
   name: string,
   patchFiles: readonly string[],
 ): ComposedProfile {
@@ -147,11 +151,20 @@ function composeProfile(
   const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
   const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
   const bundlePatches = profile.layers.flatMap(layer => layer.patches)
+  // dsh.profile.disabled keeps a bundle installed but out of the active layer
+  // stack. The stack is constant (live toggling edits only disabled), so boot
+  // row-disables the bundle's inserted entries instead of dropping the layer.
+  const disabledRows = new Set<string>()
+  for (const layer of profile.layers) {
+    if (!profile.disabled.includes(layer.packageName)) continue
+    for (const patch of layer.patches) collectInsertedRowIds(patch, disabledRows)
+  }
   const rows = new Map<string, EntryOptions>()
   for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays])) {
     if (typeof row.id === 'string') rows.set(row.id, row)
   }
   const composedOverlays = [...overlays]
+  for (const id of disabledRows) composedOverlays.push({ id, disabled: true })
   // The SHIPPED root is the part of the roster only this app can resolve: it
   // sits beside this app's own config, in both the source and built layouts.
   // The writable root the roster appends is `dsh-agent-presets`' own, so a
@@ -168,6 +181,15 @@ function composeProfile(
   const telemetryPatch = resolveTelemetryPatch(process.env.DSH_TELEMETRY_DISABLED, rows.has(TELEMETRY_ROW_ID))
   if (telemetryPatch !== undefined) composedOverlays.push(telemetryPatch)
   return { profile, bundlePatches, homePatches, overlays: composedOverlays, rows }
+}
+
+/** Collect the entry ids one patch contributes (insert lists or a direct row). */
+function collectInsertedRowIds(patch: PatchOptions, out: Set<string>): void {
+  if (Array.isArray(patch.insert)) {
+    for (const row of patch.insert) if (typeof row.id === 'string') out.add(row.id)
+  } else if (typeof patch.id === 'string') {
+    out.add(patch.id)
+  }
 }
 
 /** Options for {@link runProfile}. */

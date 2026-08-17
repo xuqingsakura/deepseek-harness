@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CENTER_MIN, clampWidth, computeColumns,
   DETAILS_DEFAULT, DETAILS_MIN, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN,
+  WORKBENCH_MINS,
 } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 
 // Numeric preference form (0 = closed); helpers keep the scenario names readable.
@@ -29,7 +30,7 @@ describe('computeColumns', () => {
 
   it('preferences beyond the clamp range are clamped before solving', () => {
     const cols = computeColumns(1920, open(9999), open(1))
-    expect(cols.sidebar).toBe(420)
+    expect(cols.sidebar).toBe(720)
     expect(cols.details).toBe(300)
     expect(computeColumns(1920, open(1), open(DETAILS_DEFAULT)).sidebar).toBe(SIDEBAR_MIN)
   })
@@ -51,6 +52,16 @@ describe('computeColumns', () => {
     // 280 + 300 + 640 = 1220 > 1210 → details 0; sidebar untouched: center = 1210-280 = 930.
     const cols = computeColumns(1210, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT))
     expect(cols).toEqual({ sidebar: 280, center: 930, details: 0 })
+  })
+
+  it('workbench mins: the file tree and viewer concede so the conversation column survives a narrow viewport', () => {
+    // 300 + 480 + 300 = 1080 > 900 → details 320, sidebar 280, center 300.
+    const cols = computeColumns(900, open(300), open(480), WORKBENCH_MINS)
+    expect(cols).toEqual({ sidebar: 280, center: 300, details: 320 })
+    // The default conversation frame never concedes its sidebar.
+    const def = computeColumns(900, open(300), open(480))
+    expect(def.sidebar).toBe(300)
+    expect(def.details).toBe(0)
   })
 
   it('the sidebar never concedes: center absorbs the deficit below CENTER_MIN', () => {

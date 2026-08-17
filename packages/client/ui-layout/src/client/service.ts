@@ -27,6 +27,20 @@ export interface ILayout {
   openDetails(): void
   /** Close the details panel. */
   closeDetails(): void
+  /** Toggle the bottom terminal panel (closed ⟷ default height). */
+  toggleBottom(): void
+  /** Close the bottom terminal panel. */
+  closeBottom(): void
+  /** Open the workbench file-tree sidebar view (expands a collapsed sidebar). */
+  openWorkbench(): void
+  /** Close the workbench file-tree sidebar view. */
+  closeWorkbench(): void
+  /**
+   * Set the active sidebar view (VSCode activity-bar semantics: clicking the
+   * active view's icon toggles the panel; another view switches and opens it).
+   * @param view - the target sidebar view.
+   */
+  setSidebarView(view: 'default' | 'workbench'): void
 }
 
 /** Cross-plugin panel-action face (ctx.layout). */
@@ -57,6 +71,31 @@ export class LayoutController implements ILayout {
   /** Close the details panel. */
   closeDetails(): void {
     this.#require().closeDetails()
+  }
+
+  /** Toggle the bottom terminal panel. */
+  toggleBottom(): void {
+    this.#require().toggleBottom()
+  }
+
+  /** Close the bottom terminal panel. */
+  closeBottom(): void {
+    this.#require().closeBottom()
+  }
+
+  /** Open the workbench file-tree sidebar view (expands a collapsed sidebar). */
+  openWorkbench(): void {
+    this.#require().openWorkbench()
+  }
+
+  /** Close the workbench file-tree sidebar view. */
+  closeWorkbench(): void {
+    this.#require().closeWorkbench()
+  }
+
+  /** Set the active sidebar view (VSCode activity-bar semantics). */
+  setSidebarView(view: 'default' | 'workbench'): void {
+    this.#require().setSidebarView(view)
   }
 
   #require(): PanelActions {

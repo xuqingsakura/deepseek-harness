@@ -26,41 +26,32 @@ function declarations(selector: string): Map<string, string> | undefined {
 }
 
 describe('SidebarRoot.module.css', () => {
-  it('shares and cancels the wide shell trailing padding structurally', () => {
+  it('shares the wide shell padding variable and cancels it in the region', () => {
     const root = declarations('.root')
     expect(root?.get('--dsh-sidebar-inline-padding')).toBe('12px')
-    expect(root?.get('padding')).toBe('6px var(--dsh-sidebar-inline-padding)')
+    expect(declarations('.panel')?.get('padding')).toBe('6px var(--dsh-sidebar-inline-padding)')
     expect(declarations('.regionArea')?.get('margin-left')).toBe('-4px')
     expect(declarations('.regionArea')?.get('padding-left')).toBe('4px')
     expect(declarations('.regionArea')?.get('margin-right')).toBe(
       'calc(-1 * var(--dsh-sidebar-inline-padding))',
     )
-    expect(declarations('.collapsed .regionArea')?.get('margin-left')).toBe('0')
-    expect(declarations('.collapsed .regionArea')?.get('padding-left')).toBe('0')
-    expect(declarations('.collapsed .regionArea')?.get('margin-right')).toBe('0')
   })
 
-  it('moves the four upper controls while the settings seat only fades', () => {
-    const animation = 'rail-in 150ms var(--ds-ease-in-out) backwards'
-    for (const selector of [
-      '.railIn .iconButton',
-      '.railIn .newSession',
-      '.railIn .regionArea',
-    ]) {
-      expect(declarations(selector)?.get('animation')).toBe(animation)
-    }
-    expect(declarations('.railIn .footArea')?.get('animation')).toBe(
-      'rail-fade-in 150ms var(--ds-ease-in-out) backwards',
-    )
-    expect(css).toMatch(
-      /@keyframes rail-in\s*\{\s*from\s*\{\s*opacity: 0;\s*transform: translateX\(49px\);\s*}\s*}/,
-    )
-    expect(css).toMatch(/@keyframes rail-fade-in\s*\{\s*from\s*\{\s*opacity: 0;\s*}\s*}/)
+  it('keeps the activity rail as a fixed 56px column with a hairline divider', () => {
+    const bar = declarations('.activityBar')
+    expect(bar?.get('width')).toBe('56px')
+    expect(bar?.get('border-right')).toBe('1px solid var(--dsw-alias-border-l1)')
+    expect(declarations('.activityIcon')?.get('width')).toBe('36px')
+    expect(declarations('.activityIcon')?.get('height')).toBe('36px')
+    expect(declarations('.activityIconActive')?.get('color')).toBe('var(--dsw-alias-label-primary)')
   })
 
-  it('gives shell rail controls the same base anchor for their shared translation', () => {
-    expect(declarations('.collapsed .logoRow')?.get('justify-content')).toBe('flex-start')
-    expect(declarations('.collapsed .newSession')?.get('align-self')).toBe('flex-start')
-    expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
+  it('fades the panel on collapse while the rail persists', () => {
+    const fading = declarations('.fading .panel')
+    expect(fading?.get('opacity')).toBe('0')
+    expect(fading?.get('transition')).toContain('150ms')
+    // The panel is a row sibling of the rail (flex row, not column).
+    expect(declarations('.root')?.get('display')).toBe('flex')
+    expect(declarations('.root')?.get('flex-direction')).toBe('row')
   })
 })

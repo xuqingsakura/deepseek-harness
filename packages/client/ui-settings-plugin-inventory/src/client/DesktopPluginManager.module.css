@@ -1,0 +1,311 @@
+/* Desktop-only plugin management block (rendered only when the Electron bridge exists). */
+.manager {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  display: grid;
+  gap: 10px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.spec {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.spec:focus-visible {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.action {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 16px;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.result {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-word;
+}
+
+.result[data-ok='false'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.selectBox {
+  flex: none;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.selectBox input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--dsw-alias-brand-primary);
+  cursor: pointer;
+}
+
+.itemBody {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.itemName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.itemName code {
+  font-family: var(--dsw-font-family-code, ui-monospace, Menlo, Consolas, monospace);
+}
+
+.itemMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.version {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.bundleTag {
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.sourceTag {
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.sourceTag[data-source='git'] {
+  background: var(--dsw-alias-state-warning-soft, rgba(217, 119, 6, 0.12));
+  color: var(--dsw-alias-state-warning-primary, #d97706);
+}
+
+.sourceTag[data-source='local'] {
+  background: var(--dsw-alias-state-success-soft, rgba(22, 163, 74, 0.12));
+  color: var(--dsw-alias-state-success-primary, #16a34a);
+}
+
+.stateTag {
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.stateTag[data-enabled='true'] {
+  background: var(--dsw-alias-state-success-soft, rgba(22, 163, 74, 0.12));
+  color: var(--dsw-alias-state-success-primary, #16a34a);
+}
+
+.stateTag[data-enabled='false'] {
+  background: var(--dsw-alias-state-warning-soft, rgba(217, 119, 6, 0.12));
+  color: var(--dsw-alias-state-warning-primary, #d97706);
+}
+
+.phaseTag {
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.phaseTag[data-phase='failed'] {
+  background: var(--dsw-alias-state-error-soft, rgba(220, 38, 38, 0.12));
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.outdated {
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--dsw-alias-state-warning-soft, rgba(217, 119, 6, 0.12));
+  color: var(--dsw-alias-state-warning-primary, #d97706);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  word-break: break-word;
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.miniButton {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.miniButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.batchBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.empty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.restart {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.buildGate {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-state-warning-primary, #d97706);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.buildWarning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.buildKeys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.buildKeys code {
+  font-family: var(--dsw-font-family-code, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+  word-break: break-all;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

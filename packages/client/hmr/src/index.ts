@@ -181,8 +181,18 @@ export function apply(ctx: Context, config: Config): void {
       const line = sseData({ type: 'rebuilt', id, rev })
       for (const res of connections) res.write(line)
     })
+    // Broadcast the authoritative graph on every recompose so the browser
+    // half can reconcile membership (mount/tear-down rows) live — the
+    // channel that makes host-side plugin enable/disable apply without a
+    // page reload. Graph frames ride the same SSE queue as rebuilt frames;
+    // the browser half serializes both.
+    const unsubscribeGraph = ctx.clientModules.onGraphChanged(() => {
+      const line = sseData({ type: 'graph', graph: ctx.clientModules.graph() })
+      for (const res of connections) res.write(line)
+    })
     return () => {
       unsubscribe()
+      unsubscribeGraph()
       disposeRoute()
       for (const res of connections) res.destroy()
       connections.clear()

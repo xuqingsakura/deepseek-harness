@@ -86,4 +86,22 @@ describe('PluginInventoryGateway', () => {
     await ctx.loader.remove(pendingId)
     expect(inventory.list().entries.some(entry => entry.entryId === pendingId)).toBe(false)
   })
+
+  it('surfaces the mount failure detail for a FAILED entry', async () => {
+    const { ctx, inventory } = await harness()
+    const activeId = await ctx.loader.create({ name: 'cordis:active' })
+    const loaderEntry = [...ctx.loader.entries()].find(entry => entry.id === activeId)
+    const fiber = loaderEntry?.fiber
+    expect(fiber).toBeDefined()
+    // White-box: a fiber that failed after mounting keeps its entry and its
+    // private `_error`; the projection serializes it for display.
+    ;(fiber as unknown as { _error: unknown })._error = new Error('boom')
+    ;(fiber as unknown as { state: number }).state = 3 // FiberState.FAILED
+    const first = inventory.list().entries.find(entry => entry.entryId === activeId)
+    expect(first?.fiberPhase).toBe('failed')
+    expect(first?.error).toBe('boom')
+    ;(fiber as unknown as { _error: unknown })._error = 'raw-failure'
+    const second = inventory.list().entries.find(entry => entry.entryId === activeId)
+    expect(second?.error).toBe('raw-failure')
+  })
 })

@@ -137,8 +137,9 @@ export default defineConfig({
     // aliases must win over bare-name prefixes.
     alias: [
       // Browserization of the vendored cordis Loader: its only node-only
-      // import; the two process probes are mapped by `define` below.
+      // imports; the two process probes are mapped by `define` below.
       { find: /^node:module$/, replacement: src('./src/node-module-stub.ts') },
+      { find: /^node:url$/, replacement: src('./src/node-url-stub.ts') },
       { find: /^@deepseek-ai\/dsh-client-web$/, replacement: src('../../packages/client/web/src/boot.tsx') },
       { find: /^@deepseek-ai\/dsh-client-web-react$/, replacement: src('../../packages/client/web-react/src/index.ts') },
       { find: /^@deepseek-ai\/dsh-client-ui-slots$/, replacement: src('../../packages/client/ui-slots/src/index.ts') },

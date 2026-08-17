@@ -1,25 +1,24 @@
 /**
- * Sidebar shell: column geometry only. Collapse is a slide plus crossfade:
- * content freezes at its expanded width (inline style) and fades out in place
- * while the sliding column (AppFrame grid tracks) clips it — nothing reflows
- * mid-slide. At settle the wide-only content unmounts and the four upper
- * controls enter the 56px rail from the same horizontal offset (one icon each,
- * same top-down order) on one fade that ends with the slide. The bottom-pinned
- * settings control only fades. The workspace/session browsing region between
- * the New Session button and the foot is the `sidebar.workspaces` registrant's,
- * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
- * hands them the wide flag (plus an expand request callback for the browser).
+ * Sidebar shell: the left column hosts a permanent 56px activity bar (brand
+ * mark plus the view-switch icons) and a resizable panel behind it. The
+ * activity bar always renders; the panel mounts only while the column is
+ * wide (VSCode-style: clicking the active view's icon collapses the panel to
+ * the rail, clicking another view switches and reopens it). The workspace
+ * browsing region between the New Session button and the foot is the
+ * `sidebar.workspaces` registrant's; the workbench file tree is the
+ * `sidebar.workbench` registrant's; the foot holds `sidebar.settings` plus
+ * `sidebar.footer.action`. The shell hands them the wide flag (plus an
+ * expand request callback for the browser).
  *
  * The column also owns whether the scroll regions nested in it draw a
  * scrollbar at all: the shell tracks the pointer and rebinds ui-theme's
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import clsx from 'clsx'
 import {
-  BrandWordmark, FishLogo,
-  IconNewChatOutline16, IconPanelLeftOutline16,
+  FishLogo, IconFolderOpenOutline16, IconNewChatOutline16, IconPanelLeftOutline16,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SidebarRootComponentProps } from './contract/slots.ts'
@@ -37,20 +36,28 @@ const COLLAPSE_SETTLE_MS = 150
 const SCROLLBAR_LINGER_MS = 2000
 
 /**
- * Render the sidebar column shell.
+ * Render the sidebar column shell: activity rail + view panel.
  * @param props - composed slot props (runtime share + injected callbacks, contract/slots.ts).
  * @returns the sidebar element tree.
  */
 export function SidebarRoot({
   collapsed,
   width,
+  view,
   startSession,
   toggleSidebar,
+  setSidebarView,
+  workbenchAvailable,
+  subscribeWorkbench,
   t,
   renderSlot,
 }: SidebarRootComponentProps) {
+  // The workbench icon appears only while the workbench plugin is installed
+  // (it registers the sidebar.workbench seat).
+  const hasWorkbench = useSyncExternalStore(subscribeWorkbench, workbenchAvailable)
+
   // Wide content stays mounted while the collapse animates (fading via
-  // .collapsed .wide), unmounts at settle, and remounts right away on expand.
+  // .collapsed .panel), unmounts at settle, and remounts right away on expand.
   const [settled, setSettled] = useState(collapsed)
   useEffect(() => {
     if (!collapsed) { setSettled(false); return }
@@ -113,6 +120,8 @@ export function SidebarRoot({
     }
   }, [pointerInside])
 
+  const workspacesActive = view !== 'workbench'
+
   return (
     <div
       ref={column}
@@ -127,66 +136,105 @@ export function SidebarRoot({
       }}
       onPointerLeave={() => { armLinger() }}
     >
-      <div className={css.logoRow}>
-        {/* Expanded, the wordmark doubles as a New Session shortcut; the
-            collapsed rail's logo is the expand toggle below instead. */}
-        {wide && (
-          <button
-            type="button"
-            className={clsx(css.brand, css.wide)}
-            aria-label={t('session.new.label')}
-            onClick={() => { startSession() }}
-          >
-            <BrandWordmark />
-          </button>
-        )}
-        {/* Rail resting state is the whale mark; hovering swaps in the panel
-            icon (the expand affordance, figma sidebar-hover flow). */}
+      {/* The permanent activity rail: brand mark on top, view-switch icons
+          below. The rail survives collapse — it IS the collapsed column. */}
+      <div className={css.activityBar}>
         <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')} delayMs={500}>
           <button
             type="button"
-            className={clsx(css.iconButton, css.toggle)}
+            className={css.brandButton}
             aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
             onClick={() => { toggleSidebar() }}
           >
-            {!wide && <FishLogo className={css.railFish} size={24} />}
-            {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
-            <IconPanelLeftOutline16 className={css.panelIcon} size={wide ? 16 : 18} />
+            <FishLogo className={css.brandFish} size={24} />
+          </button>
+        </Tooltip>
+        <div className={css.activityIcons}>
+          <Tooltip label={t('view.workspaces')} delayMs={500}>
+            <button
+              type="button"
+              className={clsx(css.activityIcon, workspacesActive && css.activityIconActive)}
+              aria-label={t('view.workspaces')}
+              aria-current={workspacesActive || undefined}
+              onClick={() => { setSidebarView('default') }}
+            >
+              <IconNewChatOutline16 size={18} />
+            </button>
+          </Tooltip>
+          {hasWorkbench ? (
+            <Tooltip label={t('view.workbench')} delayMs={500}>
+              <button
+                type="button"
+                className={clsx(css.activityIcon, view === 'workbench' && css.activityIconActive)}
+                aria-label={t('view.workbench')}
+                aria-current={view === 'workbench' || undefined}
+                onClick={() => { setSidebarView('workbench') }}
+              >
+                <IconFolderOpenOutline16 size={18} />
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
+        <div className={css.activitySpacer} />
+        <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')} delayMs={500}>
+          <button
+            type="button"
+            className={css.activityIcon}
+            aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
+            onClick={() => { toggleSidebar() }}
+          >
+            <IconPanelLeftOutline16 size={18} />
           </button>
         </Tooltip>
       </div>
 
-      {/* Expanded, the button carries its own label — tooltip only on the rail. */}
-      <Tooltip label={t('session.new.label')} delayMs={500} disabled={wide}>
-        <button
-          type="button"
-          className={css.newSession}
-          aria-label={t('session.new.label')}
-          onClick={() => { startSession() }}
-        >
-          <IconNewChatOutline16 size={wide ? 14 : 18} />
-          {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
-        </button>
-      </Tooltip>
+      {/* The wide panel mounts only while the column is wide. */}
+      {wide && (
+        <div className={css.panel}>
+          <div className={css.panelHeader}>
+            <span className={css.panelTitle}>
+              {workspacesActive ? t('view.workspaces') : t('view.workbench')}
+            </span>
+          </div>
 
-      {/* The browsing region fills the column between the controls and the
-          foot in both states; its rail icon column rides the same slot. */}
-      <div className={css.regionArea}>
-        {renderSlot('sidebar.workspaces', {
-          wide,
-          expandSidebar: () => { if (collapsed) toggleSidebar() },
-        })}
-      </div>
+          {workspacesActive && (
+            <Tooltip label={t('session.new.label')} delayMs={500} disabled>
+              <button
+                type="button"
+                className={css.newSession}
+                aria-label={t('session.new.label')}
+                onClick={() => { startSession() }}
+              >
+                <IconNewChatOutline16 size={14} />
+                <span className={css.newSessionLabel}>{t('session.new')}</span>
+              </button>
+            </Tooltip>
+          )}
 
-      {/* Footer actions stack above Settings in both sidebar widths. */}
-      <div className={css.footArea}>
-        <div className={css.footerActions}>
-          {renderSlot('sidebar.footer.action', { wide })}
+          {/* The browsing region fills the panel between the header and the
+              foot; the active view decides which region renders. */}
+          <div className={css.regionArea}>
+            {view === 'workbench'
+              ? renderSlot('sidebar.workbench', {
+                wide,
+                expandSidebar: () => { if (collapsed) toggleSidebar() },
+              })
+              : renderSlot('sidebar.workspaces', {
+                wide,
+                expandSidebar: () => { if (collapsed) toggleSidebar() },
+              })}
+          </div>
+
+          <div className={css.footArea}>
+            <div className={css.footerActions}>
+              {renderSlot('sidebar.footer.action', { wide })}
+            </div>
+            <div className={css.settingsArea}>
+              {renderSlot('sidebar.settings', { wide })}
+            </div>
+          </div>
         </div>
-        <div className={css.settingsArea}>
-          {renderSlot('sidebar.settings', { wide })}
-        </div>
-      </div>
+      )}
     </div>
   )
 }

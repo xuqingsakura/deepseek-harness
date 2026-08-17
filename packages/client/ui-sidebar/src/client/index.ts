@@ -31,11 +31,27 @@ export const inject = ['slots', 'layout', 'sessions', 'workspaces', 'locale']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar: dictionaries')
 
+  // Workbench availability: the sidebar's activity rail shows the workbench
+  // icon only while the workbench plugin registers the sidebar.workbench
+  // seat (plugin installed). Slot mutation keeps the flag live.
+  const workbenchListeners = new Set<() => void>()
+  const workbenchAvailable = (): boolean => ctx.slots.entries('sidebar.workbench').length > 0
+  const subscribeWorkbench = (fn: () => void): (() => void) => {
+    workbenchListeners.add(fn)
+    return () => { workbenchListeners.delete(fn) }
+  }
+  ctx.slots.subscribe('sidebar.workbench', () => {
+    for (const fn of [...workbenchListeners]) fn()
+  })
+
   const injectProps = (): SidebarRootInjected => ({
     // The shell's New Session button rides the runtime's shared action
     // (current Session Workspace, then recent Workspace).
     startSession: (workspaceId) => { ctx.workspaces.startSession(workspaceId) },
     toggleSidebar: () => { ctx.layout.toggleSidebar() },
+    setSidebarView: (view) => { ctx.layout.setSidebarView(view) },
+    workbenchAvailable,
+    subscribeWorkbench,
   })
   ctx.effect(
     () => ctx.slots.register({
@@ -46,6 +62,7 @@ export function apply(ctx: ClientContext): void {
       // registers the foot trigger + settings panel.
       children: {
         'sidebar.workspaces': { kind: 'single', scope: 'root' },
+        'sidebar.workbench': { kind: 'single', scope: 'root' },
         'sidebar.settings': { kind: 'single', scope: 'root' },
         'sidebar.footer.action': { kind: 'list', scope: 'root' },
       },

@@ -7,6 +7,7 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginInventoryLocaleKey } from './locales.ts'
 import css from './PluginInventorySettingsTab.module.css'
+import { DesktopPluginManager } from './DesktopPluginManager.tsx'
 
 /** Registration-side Remote face used by the section. */
 export interface PluginInventorySettingsTabInjected {
@@ -190,6 +191,14 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
               })}
             </ul>
           ) : null}
+          {window.dshDesktop !== undefined ? (
+            <DesktopPluginManager
+              t={t}
+              entries={state.status === 'ready' ? state.snapshot.entries : undefined}
+              onChanged={() => { setRequest(value => value + 1) }}
+            />
+          ) : null}
+
         </div>
       ) : null}
     </div>

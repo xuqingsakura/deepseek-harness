@@ -22,6 +22,7 @@
  * @module @deepseek-ai/dsh-app-boot/profile
  */
 
+import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import {
   existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync,
@@ -48,6 +49,8 @@ export interface DshBundleManifest {
 export interface DshProfileManifest {
   /** Ordered bundle layer list (package names). */
   bundles?: string[]
+  /** Dependency names intentionally kept out of the layer stack. */
+  disabled?: string[]
 }
 
 /**
@@ -89,6 +92,8 @@ export interface Profile {
   dir: string
   /** Bundle layers in `dsh.profile.bundles` order. */
   layers: ProfileLayer[]
+  /** Dependency names kept out of the active layer stack (row-disabled at boot). */
+  disabled: string[]
   /** Absolute path of the profile's own patch file. */
   patchPath: string
   /** The profile's own patches; empty when the file is absent. */
@@ -135,6 +140,34 @@ const PROFILE_PATCH_TEMPLATE = `# Your patch layer for this dsh profile, applied
 // profiles/node_modules installation fallback, so every plugin shares the
 // installation's single cordis instance instead of a duplicate. pnpm ≥10
 // reads its settings from pnpm-workspace.yaml, not .npmrc.
+/** Stamp file recording a completed fallback heal for one installation closure. */
+const HEAL_STAMP_FILENAME = '.dsh-heal-stamp'
+
+/**
+ * The signature of one installation closure: the install anchor path plus its
+ * direct dependency/peer set. A changed path (moved or reinstalled app) or a
+ * changed direct dependency set (new/updated package) invalidates the stamp and
+ * forces a re-heal; transitive-only changes are not tracked (the desktop's
+ * packaged closure is immutable between installs, so links cannot drift).
+ * @param installAnchor - absolute path of the dsh app's package.json.
+ * @param appManifest - the parsed installation manifest.
+ * @returns the signature hex string.
+ */
+function healSignature(installAnchor: string, appManifest: ProfileManifest): string {
+  const entries = [...Object.keys(appManifest.dependencies ?? {}), ...Object.keys(appManifest.peerDependencies ?? {})]
+    .sort()
+    .map(name => `${name}@${appManifest.dependencies?.[name] ?? appManifest.peerDependencies?.[name] ?? ''}`)
+  return createHash('sha256').update([installAnchor, ...entries].join('\n')).digest('hex')
+}
+
+/** Read the recorded heal stamp, or undefined when absent or unreadable. */
+function readHealStamp(stampPath: string): string | undefined {
+  try {
+    return readFileSync(stampPath, 'utf8').trim()
+  } catch {
+    return undefined
+  }
+}
 const PROFILE_PNPM_WORKSPACE = `packages:
   - .
 
@@ -225,6 +258,11 @@ export function healProfilesModuleFallback(installAnchor: string, home: string =
   const modulesDir = join(profilesDir, 'node_modules')
   mkdirSync(modulesDir, { recursive: true })
   const appManifest = JSON.parse(readFileSync(installAnchor, 'utf8')) as ProfileManifest
+  // A matching stamp means this closure was already healed: skip the closure
+  // BFS and the per-link checks entirely (the desktop runs this every launch).
+  const signature = healSignature(installAnchor, appManifest)
+  const stampPath = join(modulesDir, HEAL_STAMP_FILENAME)
+  if (readHealStamp(stampPath) === signature) return
   const links = new Map<string, string>()
   /* v8 ignore next -- a real app manifest always declares its name */
   if (appManifest.name !== undefined) links.set(appManifest.name, dirname(installAnchor))
@@ -252,6 +290,7 @@ export function healProfilesModuleFallback(installAnchor: string, home: string =
     mkdirSync(dirname(link), { recursive: true })
     ensureSymlink(link, target)
   }
+  writeFileSync(stampPath, signature + '\n')
 }
 
 /**
@@ -385,6 +424,7 @@ export function loadProfile(
   const manifest = normalizeShippedProfile(name, dir, readProfileManifest(binName, dir))
   // A hand-written profile manifest may omit the dsh section entirely.
   const bundles = manifest.dsh?.profile?.bundles ?? []
+  const disabled = manifest.dsh?.profile?.disabled ?? []
   const layers = bundles.map((packageName): ProfileLayer => {
     const packageDir = resolveBundleDir(binName, packageName, installAnchor, dir)
     const bundleManifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as ProfileManifest
@@ -399,9 +439,8 @@ export function loadProfile(
   const patches = options.userLayer !== false && existsSync(patchPath)
     ? loadOverlayPatches(binName, patchPath)
     : []
-  return { name, dir, layers, patchPath, patches }
+  return { name, dir, layers, disabled, patchPath, patches }
 }
-
 /**
  * Compose patch layers into the effective entry list over an empty root —
  * the same single `applyEntryPatches` call the boot include makes, so flag

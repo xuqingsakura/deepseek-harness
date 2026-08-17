@@ -7,7 +7,8 @@
   background: var(--dsw-alias-bg-base);
   /* Collapse/expand animates the tracks on the deepsuite sider curve
      (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
-  transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    grid-template-rows var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 /* Dragging writes widths at pointer cadence; easing them would detach the
@@ -22,7 +23,18 @@
   }
 }
 
+/* The columns live in the top grid row. The sidebar spans BOTH rows so the
+   bottom terminal strip (row 2, columns 2-3) never leaves a blank rectangle
+   under the file tree. The workbench view swaps grid-column (center 2->3,
+   details 3->2); with auto placement the cursor passes column 2 while
+   placing the center column, so the later details column would land in an
+   implicit second row whose auto height collapses to 0 (the viewer's flex:1
+   children contribute no intrinsic height) and the whole center column
+   disappears below the frame. grid-row: 1 keeps the columns in the top row. */
+
 .sidebarCol {
+  grid-row: 1 / -1;
+  grid-column: 1;
   min-width: 0;
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
@@ -30,6 +42,8 @@
 }
 
 .centerCol {
+  grid-row: 1;
+  grid-column: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -37,9 +51,26 @@
 }
 
 .detailsCol {
+  grid-row: 1;
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
   border-left: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* The workbench view swaps the center and right column roles: the file
+   viewer renders in the details column but is placed in the CENTER track,
+   while the conversation stays in the center column but is placed in the
+   RIGHT track. The DOM subtree never moves, so React identity (and the
+   conversation's own state) survives the swap. */
+.frame[data-workbench] .centerCol {
+  grid-column: 3;
+}
+
+.frame[data-workbench] .detailsCol {
+  grid-column: 2;
 }
 
 /* The details subtree stays mounted at zero width, so its border must not paint
@@ -105,6 +136,46 @@
 .handle[data-side='details'][data-dragging='true']::after {
   background: var(--dsw-alias-button-floating-hover);
   border-color: var(--dsw-alias-border-l3);
+}
+
+/* The bottom terminal panel occupies row 2 under the center and details
+   columns only: the file-tree column keeps its full height, so the terminal
+   strip does not stretch the whole frame width. */
+.bottomRow {
+  grid-row: 2;
+  grid-column: 2 / -1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+/* Vertical drag handle for the bottom panel: an 8px hit strip centered on
+   the row border, row-resize cursor, above panel content. */
+.verticalHandle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  margin-top: -4px;
+  cursor: row-resize;
+  z-index: 3;
+  touch-action: none;
+}
+
+.verticalHandle:hover::after,
+.verticalHandle[data-dragging='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--dsw-alias-button-floating-hover);
 }
 
 .overlayLayer {

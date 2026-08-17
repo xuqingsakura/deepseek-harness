@@ -1,6 +1,6 @@
 /** Read-only projection of the current Cordis Loader plugin entries. */
 
-import type { Context, FiberState } from '@deepseek-ai/cordis'
+import type { Context, Fiber, FiberState } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 // Typert-generated ./typert and ./remote artifacts import Zod at runtime.
@@ -17,6 +17,17 @@ export type * from './types.ts'
 /** Brand an existing Loader-tree entry id at the owning boundary. */
 function pluginEntryId(value: string): PluginEntryId {
   return value as PluginEntryId
+}
+
+/**
+ * Mount failure detail from a FAILED owning Fiber. The error lives on
+ * Cordis's private `_error` slot (set exactly when the root Fiber transitions
+ * to FAILED, so callers guard on the state first); the projection reads it
+ * only for display, never for control.
+ */
+function fiberError(fiber: Fiber): string {
+  const error = (fiber as unknown as { _error: unknown })._error
+  return error instanceof Error ? error.message : String(error)
 }
 
 /** Runtime mirror: FiberState is a cross-package const enum. */
@@ -58,12 +69,16 @@ export class PluginInventoryGateway extends TypertRemoteService {
     const entries: PluginInventoryEntry[] = []
     for (const entry of this.ctx.loader.entries()) {
       if (entry.options.group) continue
-      entries.push({
+      const base = {
         entryId: pluginEntryId(entry.id),
         moduleName: entry.options.name,
         enabled: !entry.disabled,
         fiberPhase: entry.fiber === undefined ? null : FIBER_PHASE[entry.fiber.state],
-      })
+      }
+      const error = entry.fiber !== undefined && entry.fiber.state === FIBER_STATE.FAILED
+        ? fiberError(entry.fiber)
+        : undefined
+      entries.push(error !== undefined ? { ...base, error } : base)
     }
     return { entries }
   }

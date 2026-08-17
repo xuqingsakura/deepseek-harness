@@ -7,6 +7,7 @@ import {
 } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { ClientConnectionRpc } from '../rpc.ts'
 import { randomUuid } from './random-uuid.ts'
+import type { ElectronApiBridge } from './electron-api-client.ts'
 
 const INTERNAL_BASE = 'http://dsh.internal'
 const CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/
@@ -59,5 +60,42 @@ function assertTarget(channel: string, endpoint: string): void {
     || segments.some(segment =>
       segment === '' || segment === '.' || segment === '..' || !ENDPOINT_SEGMENT_PATTERN.test(segment))) {
     throw new Error(`connection: invalid RPC target ${JSON.stringify(`${channel}/${endpoint}`)}`)
+  }
+}
+
+/**
+ * Electron IPC caller for generic Connection unary RPC channels: same contract
+ * as {@link createWebConnectionRpc}, but every request rides the preload
+ * bridge instead of the browser's fetch.
+ * @returns caller that owns request correlation and response-envelope validation.
+ */
+export function createElectronConnectionRpc(): ClientConnectionRpc {
+  return {
+    async call(channel, endpoint, payload, _signal) {
+      assertTarget(channel, endpoint)
+      const rpcId = RpcId(randomUuid())
+      const message: ClientRequest = {
+        type: 'client-request',
+        rpcId,
+        method: endpoint,
+        payload,
+      }
+      const bridge = (globalThis as { dshDesktop?: ElectronApiBridge }).dshDesktop
+      if (bridge === undefined) throw new Error('connection: electron rpc bridge missing')
+      const response = await bridge.apiFetch({
+        url: `${resolveBase()}${channel}/${endpoint}`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(message),
+      })
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`transport failure for ${channel}/${endpoint}: HTTP ${response.status}`)
+      }
+      const full = serverResponseSchema.parse(JSON.parse(response.text))
+      if (full.rpcId !== rpcId) {
+        throw new Error(`rpcId mismatch for ${endpoint}: sent ${rpcId}, got ${full.rpcId}`)
+      }
+      return full.result
+    },
   }
 }

@@ -1,5 +1,7 @@
 import { composeError, Context } from '@deepseek-ai/cordis'
 import { isNonNullable, type Dict } from '@deepseek-ai/cosmokit'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { Entry, type EntryOptions } from './entry.ts'
 import { EntryGroup } from './group.ts'
 
@@ -156,7 +158,13 @@ export abstract class EntryTree {
       } else if (name.startsWith('.')) {
         return await import(/* @vite-ignore */new URL(name, this.ctx.baseUrl).href)
       } else {
-        return await import(/* @vite-ignore */name)
+        // Hosts without Node's internal loader (the desktop in-process host)
+        // cannot resolve a bare profile plugin from this file's own module
+        // graph; fall back to the loader's baseUrl (the profile directory) so
+        // plugins installed into profiles/<name>/node_modules resolve the same
+        // way the internal loader resolves them from baseUrl.
+        const require = createRequire(new URL('package.json', this.ctx.baseUrl))
+        return await import(/* @vite-ignore */pathToFileURL(require.resolve(name)).href)
       }
     }, getOuterStack)
   }

@@ -1,0 +1,41 @@
+appId: com.deepseek-ai.dsh-desktop
+productName: DeepSeek Harness
+directories:
+  output: C:/Users/苏铭/AppData/Local/Temp/dsh-pkg
+  buildResources: build
+electronDist: D:/deepseek-harness/apps/desktop/node_modules/electron/dist
+files:
+  - lib/**/*
+  - assets/**/*
+  - package.json
+extraResources:
+  - from: out/runtime
+    to: runtime
+  # Vendored pnpm (official dsh plugin installer) shipped for Settings → Plugins.
+  - from: runtime/pnpm
+    to: pnpm
+  # Bundled workbench plugin: installable from Settings → Plugins (local path).
+  - from: plugins/dsh-workbench
+    to: plugins/dsh-workbench
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+publish:
+  # Placeholder channel; the app honors DSH_UPDATE_FEED_URL or
+  # %APPDATA%\dsh-desktop\update-config.json at runtime before this value.
+  - provider: generic
+    url: https://updates.example.invalid/dsh-desktop/
+nsis:
+  oneClick: false
+  # Always per-machine: the previous per-user/per-machine mix made silent
+  # upgrades fail (exit 2) and forced uninstall-then-install. One scope means a
+  # later Setup.exe overwrites the earlier install in place.
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DeepSeek Harness
+  uninstallDisplayName: DeepSeek Harness

@@ -28,6 +28,8 @@ Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordis
 
 ## Local modifications
 
+9. **`loader/src/config/tree.ts` bare-import fallback for hosts without Node's internal loader**: when `ctx.loader.internal` is absent (the desktop in-process host — the `node-addon-require-builtin` addon is system-Node ABI and unavailable under Electron) and the specifier is a bare package name, resolve it through `createRequire(new URL('package.json', ctx.baseUrl))` instead of `import(name)` from the loader's own module graph. `baseUrl` is the profile directory, so profile-installed plugins (`profiles/<name>/node_modules`) resolve the same way the internal loader resolves them from `baseUrl`. Relative and `cordis:` specifiers are unchanged.
+
 Keep this log exhaustive — every divergence from upstream must be listed.
 
 1. **`hmr/src/index.ts`**: removed the `./locales/en-US.yml` / `./locales/zh-CN.yml` imports, the `.i18n({...})` call on the `Config` schema, and the `src/locales/` directory. Rationale: those imports require a runtime YAML loader hook (`@cordisjs/unyaml`) that we do not vendor; the i18n texts only localize config descriptions.
@@ -58,3 +60,5 @@ To update a vendored package from upstream:
 3. Re-apply the local modifications listed above (or drop them if upstream made them unnecessary — update the log either way).
 4. Update the version and commit hash in the manifest table.
 5. Run `pnpm install && pnpm run test && pnpm run build` at the repo root.
+
+19. **`cordis/src/utils.ts` `isConstructor` invokes plain-function plugins instead of constructing them**: a callable with a prototype was always constructed with `new`, and the constructed instance is what `execute` returns — so a plain-function plugin apply that returns a disposer had its cleanup silently dropped (the fresh instance replaced the returned disposer and was never collected into the fiber's `_disposables`). Only a class definition (`Function.prototype.toString` starts with `class`) is now constructed; every other callable-with-prototype shape is invoked directly so the returned disposer reaches the fiber. Fixes third-party client plugins such as whale-girl whose DOM cleanup never ran on disable. Covered by the desktop live plugin enable/disable end-to-end verification.

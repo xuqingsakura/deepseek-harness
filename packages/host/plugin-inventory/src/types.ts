@@ -20,6 +20,8 @@ export interface PluginInventoryEntry {
   /** Effective Loader enablement, including disabled ancestor groups. */
   readonly enabled: boolean
   readonly fiberPhase: PluginFiberPhase
+  /** Mount failure detail, present only when the entry's root Fiber is FAILED. */
+  readonly error?: string
 }
 
 /** Point-in-time inventory returned by the plugin inventory Remote. */

@@ -1,0 +1,13 @@
+# Desktop shell overlay: pin the in-app browse directory picker instead of the
+# auto chooser. `-auto` resolves to the native OS chooser on a loopback bind,
+# and its Win32 dialog worker is spawned with process.execPath - the Electron
+# binary under the in-process host - so the worker can never report and the
+# picker fails ("win32 folder dialog worker exited before reporting a result").
+# The browse backend and surface run entirely in the renderer, no child process.
+- id: directory-picker
+  disabled: true
+- insert:
+    - id: directory-picker-browse
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+    - id: ui-directory-picker-browse
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'

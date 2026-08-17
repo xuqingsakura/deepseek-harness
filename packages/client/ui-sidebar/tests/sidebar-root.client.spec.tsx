@@ -21,18 +21,24 @@ afterEach(() => {
 // props share; stub them as never-called functions.
 const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
 
-function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
+function mountShell({ collapsed = false, width = 300, initialView = 'default', workbench = false }: { collapsed?: boolean; width?: number; initialView?: 'default' | 'workbench'; workbench?: boolean } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
+  const setSidebarView = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
+  let workbenchOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
-  let current = { collapsed, width }
+  let current = { collapsed, width, view: initialView, workbench }
   const root = () => (
     <SidebarRoot
-      collapsed={current.collapsed} width={current.width}
+      collapsed={current.collapsed} width={current.width} view={current.view}
       useSessions={neverHook} useWorkspaces={neverHook}
-      startSession={startSession} toggleSidebar={toggleSidebar} t={t}
+      startSession={startSession} toggleSidebar={toggleSidebar}
+      setSidebarView={setSidebarView}
+      workbenchAvailable={() => current.workbench}
+      subscribeWorkbench={() => () => {}}
+      t={t}
       renderSlot={((
         key: string,
         owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
@@ -45,6 +51,10 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
           footerActionOwner = owner
           return <div data-testid="footer-action-seat" data-wide={owner.wide} />
         }
+        if (key === 'sidebar.workbench') {
+          workbenchOwner = owner as SidebarSectionOwnerProps
+          return <div data-testid="workbench-region" data-wide={owner.wide} />
+        }
         regionOwner = owner as SidebarSectionOwnerProps
         return <div data-testid="region" data-wide={owner.wide} />
       }) as SidebarRootComponentProps['renderSlot']}
@@ -54,9 +64,14 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   return {
     startSession,
     toggleSidebar,
+    setSidebarView,
     regionOwner: () => {
       if (regionOwner === undefined) throw new Error('region owner not rendered')
       return regionOwner
+    },
+    workbenchOwner: () => {
+      if (workbenchOwner === undefined) throw new Error('workbench owner not rendered')
+      return workbenchOwner
     },
     settingsOwner: () => {
       if (settingsOwner === undefined) throw new Error('settings owner not rendered')
@@ -74,15 +89,27 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
 }
 
 describe('SidebarRoot shell', () => {
-  it('routes New Session (capsule + wordmark) and the column toggle', () => {
+  it('routes New Session and the column toggle', () => {
     const b = mountShell()
-    // Expanded, both the wordmark and the capsule start a session.
+    // Expanded, the panel capsule starts a session.
     const starters = screen.getAllByRole('button', { name: 'New session' })
-    expect(starters).toHaveLength(2)
+    expect(starters).toHaveLength(1)
     for (const button of starters) fireEvent.click(button)
-    expect(b.startSession).toHaveBeenCalledTimes(2)
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+    expect(b.startSession).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Collapse sidebar' })[0]!)
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
+  })
+
+  it('the foot collapse button toggles back open from the collapsed rail', () => {
+    const b = mountShell()
+    const collapseButtons = screen.getAllByRole('button', { name: 'Collapse sidebar' })
+    // The foot button is the last of the two activity-bar toggles.
+    const foot = collapseButtons[collapseButtons.length - 1]!
+    fireEvent.click(foot)
+    expect(b.toggleSidebar).toHaveBeenCalledOnce()
+    b.rerender({ collapsed: true })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open sidebar' })[0]!)
+    expect(b.toggleSidebar).toHaveBeenCalledTimes(2)
   })
 
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
@@ -96,24 +123,48 @@ describe('SidebarRoot shell', () => {
     expect(b.toggleSidebar).not.toHaveBeenCalled()
   })
 
-  it('keeps the region mounted through collapse and expands on its request', () => {
+  it('keeps the panel mounted through collapse, then unmounts at settle', () => {
     vi.useFakeTimers()
     const b = mountShell()
     b.rerender({ collapsed: true })
-    // Wide content survives the crossfade window, then settles into the rail.
+    // Wide content survives the crossfade window.
     expect(b.regionOwner().wide).toBe(true)
+    expect(screen.getByTestId('region')).toBeTruthy()
     vi.advanceTimersByTime(200)
     b.rerender({})
-    expect(b.regionOwner().wide).toBe(false)
-    expect(b.footerActionOwner().wide).toBe(false)
-    expect(screen.getByTestId('region')).toBeTruthy()
+    // At settle the panel unmounts; the activity rail remains.
+    expect(screen.queryByTestId('region')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Open sidebar' })[0]).toBeTruthy()
+    // The stale region owner's expand request still routes through the shell.
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
-  it('renders statically collapsed on a cold start (no crossfade classes)', () => {
-    const b = mountShell({ collapsed: true })
-    expect(b.regionOwner().wide).toBe(false)
-    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+  it('renders statically collapsed on a cold start (rail only, no panel)', () => {
+    mountShell({ collapsed: true })
+    expect(screen.queryByTestId('region')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Open sidebar' })[0]).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
+  })
+
+  it('shows the workspace browser by default and swaps to the file tree on the workbench view', () => {
+    const b = mountShell()
+    expect(screen.getByTestId('region')).toBeTruthy()
+    expect(screen.queryByTestId('workbench-region')).toBeNull()
+    b.rerender({ view: 'workbench' })
+    expect(screen.getByTestId('workbench-region')).toBeTruthy()
+    expect(screen.queryByTestId('region')).toBeNull()
+    expect(b.workbenchOwner().wide).toBe(true)
+  })
+
+  it('hides the workbench icon until the workbench seat is registered, then routes clicks to setSidebarView', () => {
+    const b = mountShell()
+    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
+    b.rerender({ workbench: true })
+    expect(screen.getByRole('button', { name: 'Files' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+    expect(b.setSidebarView).toHaveBeenCalledWith('workbench')
+    fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
+    expect(b.setSidebarView).toHaveBeenCalledWith('default')
   })
 })
