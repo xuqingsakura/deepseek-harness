@@ -113,13 +113,18 @@ jobs:
           Copy-Item (Join-Path $pkg $spaced) (Join-Path 'release-assets' "$dash.exe")
           $block = Join-Path $pkg "$spaced.blockmap"
           if (Test-Path $block) { Copy-Item $block (Join-Path 'release-assets' "$dash.exe.blockmap") }
-          # Channel metadata: <prerelease>.yml (e.g. rc.yml) or latest.yml.
-          $channel = if ($version -match '-') { ($version -split '-')[1].Split('.')[0] } else { 'latest' }
-          $channelFile = Join-Path $pkg "$channel.yml"
-          if (-not (Test-Path $channelFile)) { $channelFile = Join-Path $pkg 'latest.yml' }
-          if (-not (Test-Path $channelFile)) { throw "No channel metadata yml found in $pkg" }
-          Copy-Item $channelFile 'release-assets/'
-          if ($version -match '-') { Copy-Item $channelFile 'release-assets/latest.yml' }
+          # Channel metadata: electron-builder writes latest.yml (github
+          # provider default) or <prerelease>.yml; publish the newest one under
+          # both names so the GitHub provider's rc/latest lookup both resolve.
+          $candidates = @()
+          foreach ($name in @('latest.yml', 'rc.yml', 'beta.yml', 'alpha.yml')) {
+            $cand = Join-Path $pkg $name
+            if (Test-Path $cand) { $candidates += $cand }
+          }
+          if ($candidates.Count -eq 0) { throw "No channel metadata yml found in $pkg" }
+          $channelFile = $candidates | Sort-Object { (Get-Item $_).LastWriteTime } -Descending | Select-Object -First 1
+          Copy-Item $channelFile 'release-assets/latest.yml'
+          Copy-Item $channelFile 'release-assets/rc.yml'
           Get-ChildItem 'release-assets' | ForEach-Object { Write-Output "asset: $($_.Name)" }
 
       - name: Publish GitHub release
