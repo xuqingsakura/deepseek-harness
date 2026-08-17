@@ -55,7 +55,7 @@ pnpm --filter @deepseek-ai/dsh-desktop exec electron . --gen-icon apps/desktop/a
 
 ## 打包（Windows NSIS）
 
-安装包在 `resources/runtime` 下捆绑 host 运行时（工作区包的一份已部署闭包）；见 `runtime/package.json` 与 `electron-builder.yml`。执行 `pnpm run build:lib:host` 后，用 `node apps/desktop/scripts/deploy-runtime.mjs` 刷新闭包，该脚本会把工作区各包最新构建的 `lib/` 同步进闭包，并重新生成稳定的 `embed.js` 再导出 shim，并裁剪冗余以减小安装包体积、加快安装：`.map`/`.d.ts`/`.pdb`/`.ts` 工件、构建期工具（`typescript`、`vite`）、`node.exe` 子进程回退（in-process host 是打包默认；`DSH_DESKTOP_HOST=child` 现在仅用于开发），以及除 DeepSeek、Xiaomi/MiMo 与 OpenCode（Zen/Zen Go）家族之外的所有 pi-ai 提供方。这使安装包从 263 MB 减到约 135 MB，静默安装从 16 分多钟缩短到约 7 分钟。
+安装包在 `resources/runtime` 下捆绑 host 运行时（工作区包的一份已部署闭包）；见 `runtime/package.json` 与 `electron-builder.yml`。`package:desktop` 会在干净树（CI）上用 `pnpm deploy` 物化缺失的闭包，再用 `node apps/desktop/scripts/deploy-runtime.mjs` 刷新（该脚本还会补齐 pnpm deploy 跳过的 `@deepseek-ai/dsh` bin 包，并裁剪 legacy deploy 复制进来的重复 vendored pnpm），该脚本会把工作区各包最新构建的 `lib/` 同步进闭包，并重新生成稳定的 `embed.js` 再导出 shim，并裁剪冗余以减小安装包体积、加快安装：`.map`/`.d.ts`/`.pdb`/`.ts` 工件、构建期工具（`typescript`、`vite`）、`node.exe` 子进程回退（in-process host 是打包默认；`DSH_DESKTOP_HOST=child` 现在仅用于开发），以及除 DeepSeek、Xiaomi/MiMo 与 OpenCode（Zen/Zen Go）家族之外的所有 pi-ai 提供方。这使安装包从 263 MB 减到约 135 MB，静默安装从 16 分多钟缩短到约 7 分钟。
 
 ```sh
 # one-command package: builds client libs, refreshes the runtime closure

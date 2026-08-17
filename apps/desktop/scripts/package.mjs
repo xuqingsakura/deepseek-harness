@@ -11,7 +11,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -22,12 +22,12 @@ const DIST_INSTALLER = join(APP_ROOT, 'dist-installer')
 const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8'))
 
 /** Run one step with inherited stdio; exit with its status on failure. */
-function run(label, command, args, cwd) {
+function run(label, command, args, cwd, env = {}) {
   console.log('')
   console.log('=== ' + label + ' ===')
   // pnpm/npx are .cmd shims on Windows; running them needs a shell. The args
   // are hard-coded literals in this script, so no injection surface exists.
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
+  const result = spawnSync(command, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, ...env } })
   if (result.status !== 0) {
     console.error('package: step failed (exit ' + String(result.status) + '): ' + label)
     process.exit(result.status ?? 1)
@@ -41,11 +41,34 @@ if (!existsSync(CLI_LIB)) {
 
 // 1. Client bundles feed the web profile the shell boots in-process.
 run('build client libs', 'pnpm', ['run', 'build:lib:client'], REPO_ROOT)
-// 2. Refresh the packaged runtime closure with all freshly built workspace libs.
+// 2. A clean tree (CI) has no deployed closure yet; materialize it with pnpm
+// deploy. Local trees already have it and skip this step.
+const deployTarget = join(APP_ROOT, 'out', 'runtime', 'host-deploy')
+const runtimeDshLib = join(deployTarget, 'node_modules', '@deepseek-ai', 'dsh', 'lib')
+if (!existsSync(runtimeDshLib)) {
+  // pnpm deploy refuses a non-empty target, so clear a stale closure first
+  // (a fresh pnpm deploy also skips the @deepseek-ai/dsh bin package; the
+  // deploy-runtime step stages it). CI=true skips any non-TTY purge prompt.
+  if (existsSync(deployTarget)) rmSync(deployTarget, { recursive: true, force: true })
+  const previousCi = process.env.CI
+  process.env.CI = 'true'
+  run('deploy host closure', 'pnpm', [
+    '--filter', '@deepseek-ai/dsh-desktop-host-pkg',
+    'deploy', '--legacy', '--prod',
+    '--config.node-linker=hoisted',
+    '--config.auto-install-peers=false',
+    '--config.link-workspace-packages=true',
+    '--config.confirm-modules-purge=false',
+    deployTarget,
+  ], REPO_ROOT)
+  if (previousCi === undefined) delete process.env.CI
+  else process.env.CI = previousCi
+}
+// 3. Refresh the packaged runtime closure with all freshly built workspace libs.
 run('deploy runtime closure', 'node', ['apps/desktop/scripts/deploy-runtime.mjs'], REPO_ROOT)
-// 3. Compile the Electron shell (main + preload).
+// 4. Compile the Electron shell (main + preload).
 run('build desktop shell', 'pnpm', ['run', 'build'], APP_ROOT)
-// 4. Package the NSIS installer. CI overrides the machine-specific output
+// 5. Package the NSIS installer. CI overrides the machine-specific output
 // directory from electron-builder.yml via DSH_PKG_OUTPUT_DIR.
 const pkgArgs = ['electron-builder', '--win', 'nsis', '--publish', 'never']
 const pkgOutputOverride = process.env.DSH_PKG_OUTPUT_DIR?.trim()
@@ -54,7 +77,7 @@ if (pkgOutputOverride !== undefined && pkgOutputOverride !== '') {
 }
 run('package NSIS installer', 'npx', pkgArgs, APP_ROOT)
 
-// 5. Land the installer next to its siblings.
+// 6. Land the installer next to its siblings.
 const builderYml = readFileSync(join(APP_ROOT, 'electron-builder.yml'), 'utf8')
 const outputMatch = /^\s*output:\s*(.+)$/m.exec(builderYml)
 const outputDir = pkgOutputOverride !== undefined && pkgOutputOverride !== ''

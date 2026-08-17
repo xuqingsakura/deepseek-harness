@@ -10,7 +10,7 @@
  * @module @deepseek-ai/dsh-desktop/deploy-runtime
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -22,9 +22,22 @@ if (!existsSync(CLI_LIB)) {
   console.error(`deploy-runtime: built CLI lib not found at ${CLI_LIB}; run \`pnpm run build:lib:host\` first`)
   process.exit(1)
 }
+// A fresh `pnpm deploy` materializes the closure without the @deepseek-ai/dsh
+// bin package (pnpm skips bin-only workspace packages), so stage the dsh
+// package from the built CLI output before refreshing it. A fully missing
+// closure (no @deepseek-ai dir at all) is still an error: run package.mjs,
+// which deploys it, or `pnpm deploy` the host-pkg manifest first.
+const DSH_ROOT = resolve(RUNTIME_DSH_LIB, '..')
 if (!existsSync(RUNTIME_DSH_LIB)) {
-  console.error(`deploy-runtime: runtime closure not found at ${RUNTIME_DSH_LIB}; deploy the host closure first`)
-  process.exit(1)
+  if (!existsSync(join(DSH_ROOT, '..', '..'))) {
+    console.error(`deploy-runtime: runtime closure not found at ${RUNTIME_DSH_LIB}; deploy the host closure first`)
+    process.exit(1)
+  }
+  mkdirSync(RUNTIME_DSH_LIB, { recursive: true })
+  copyFileSync(join(APP_ROOT, '..', 'cli', 'package.json'), join(DSH_ROOT, 'package.json'))
+  const configSrc = join(APP_ROOT, '..', 'cli', 'config')
+  if (existsSync(configSrc)) cpSync(configSrc, join(DSH_ROOT, 'config'), { recursive: true })
+  console.log(`deploy-runtime: staged dsh package at ${DSH_ROOT}`)
 }
 
 /** Public exports declared by the profile-boot bundle, as `{ name, alias }`. */
@@ -145,6 +158,11 @@ function pruneClosure() {
   }
   // The in-process host is the packaged default; the child fallback is dev-only.
   removeFile(join(APP_ROOT, 'out', 'runtime', 'node.exe'))
+  // A legacy pnpm deploy copies the host-pkg source dir verbatim, dragging the
+  // vendored pnpm (apps/desktop/runtime/pnpm) into the closure; it ships
+  // separately via electron-builder extraResources for the plugin installer,
+  // so this copy is pure duplication (~110 MB).
+  removeDir(join(APP_ROOT, 'out', 'runtime', 'host-deploy', 'pnpm'))
   console.log(`deploy-runtime: closure pruned (${removedFiles} entries removed)`)
 }
 
