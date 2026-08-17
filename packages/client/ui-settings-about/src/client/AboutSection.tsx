@@ -17,12 +17,37 @@ export interface DesktopUpdateState {
   message?: string
 }
 
+/** One migration step outcome reported by the bridge. */
+export interface MigrationStepView {
+  kind: string
+  action: string
+}
+
+/** Migration report mirrored from the main-process importer. */
+export interface MigrationReportView {
+  source: string
+  target: string
+  dryRun: boolean
+  steps: MigrationStepView[]
+  sessionsCopied: number
+  sessionsSkipped: number
+  storagesMerged: number
+  errors: string[]
+}
+
 /** Minimal face of the desktop update bridge (preload exposes the rest). */
 interface DesktopUpdateBridge {
   updateStatus(): Promise<DesktopUpdateState>
   updateCheck(): Promise<DesktopUpdateState>
   updateInstall(): void
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void
+  migrateWebData(options?: {
+    source?: string
+    dryRun?: boolean
+    includeSettings?: boolean
+    includeCredentials?: boolean
+    force?: boolean
+  }): Promise<MigrationReportView>
 }
 
 declare global {
@@ -75,6 +100,32 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
     }
   }, [desktop])
 
+  const [migration, setMigration] = useState<MigrationReportView | undefined>(undefined)
+  const [migrating, setMigrating] = useState(false)
+  const [includeSettings, setIncludeSettings] = useState(false)
+  const [includeCredentials, setIncludeCredentials] = useState(false)
+
+  const runMigration = useCallback(async (dryRun: boolean) => {
+    if (desktop === undefined || migrating) return
+    setMigrating(true)
+    try {
+      setMigration(await desktop.migrateWebData({ dryRun, includeSettings, includeCredentials }))
+    } catch (error) {
+      setMigration({
+        source: '~/.dsh',
+        target: '',
+        dryRun,
+        steps: [],
+        sessionsCopied: 0,
+        sessionsSkipped: 0,
+        storagesMerged: 0,
+        errors: [error instanceof Error ? error.message : String(error)],
+      })
+    } finally {
+      setMigrating(false)
+    }
+  }, [desktop, migrating, includeSettings, includeCredentials])
+
   const check = useCallback(async () => {
     if (desktop === undefined || busy) return
     setBusy(true)
@@ -120,6 +171,66 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
           </button>
         )}
       </div>
+
+      <div className={css.divider} />
+      <h2 className={css.heading}>{t('migrateTitle')}</h2>
+      <p className={css.intro}>{t('migrateIntro')}</p>
+      <div className={css.row}>
+        <span className={css.label}>{t('migrateSource')}</span>
+        <span className={css.value}>{migration?.source ?? '~/.dsh'}</span>
+      </div>
+      <div className={css.row}>
+        <span className={css.label}>{t('migrateTarget')}</span>
+        <span className={css.value}>{migration?.target !== undefined && migration.target !== '' ? migration.target : t('migrateTargetDefault')}</span>
+      </div>
+      <label className={css.check}>
+        <input
+          type="checkbox"
+          checked={includeSettings}
+          onChange={(event) =>{  setIncludeSettings(event.target.checked) }}
+          disabled={migrating}
+        />
+        {t('migrateIncludeSettings')}
+      </label>
+      <label className={css.check}>
+        <input
+          type="checkbox"
+          checked={includeCredentials}
+          onChange={(event) =>{  setIncludeCredentials(event.target.checked) }}
+          disabled={migrating}
+        />
+        {t('migrateIncludeCredentials')}
+      </label>
+      <div className={css.actions}>
+        <button type="button" className={css.button} onClick={() => void runMigration(true)} disabled={migrating}>
+          {migrating ? t('migrateRunning') : t('migratePreview')}
+        </button>
+        <button type="button" className={css.button} onClick={() => void runMigration(false)} disabled={migrating}>
+          {migrating ? t('migrateRunning') : t('migrateStart')}
+        </button>
+      </div>
+      {migration !== undefined && (
+        <div className={css.migrateResult}>
+          <div className={css.row}>
+            <span className={css.label}>{t('migrateSessionsCopied')}</span>
+            <span className={css.value}>{migration.sessionsCopied}</span>
+          </div>
+          <div className={css.row}>
+            <span className={css.label}>{t('migrateSessionsSkipped')}</span>
+            <span className={css.value}>{migration.sessionsSkipped}</span>
+          </div>
+          <div className={css.row}>
+            <span className={css.label}>{t('migrateStoragesMerged')}</span>
+            <span className={css.value}>{migration.storagesMerged}</span>
+          </div>
+          {migration.errors.length > 0 && (
+            <p className={css.error} role="alert">{t('migrateErrors')}: {migration.errors.join('; ')}</p>
+          )}
+          {migration.dryRun && migration.errors.length === 0 && (
+            <p className={css.hint}>{t('migrateDryRunHint')}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

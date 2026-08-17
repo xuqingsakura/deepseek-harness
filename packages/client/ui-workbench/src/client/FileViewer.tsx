@@ -13,9 +13,9 @@ import css from './FileViewer.module.css'
 /** The injected read/write verbs the panel hands down. */
 export interface FileViewerInjected {
   /** Read one text file through the workbench window. */
-  readText(sessionId: string, path: string): Promise<WorkbenchReadResult>
+  readText: (sessionId: string, path: string) => Promise<WorkbenchReadResult>
   /** Write one text file atomically; a stale version token fails loud. */
-  writeText(sessionId: string, path: string, content: string, version: WorkbenchWriteResult['version']): Promise<WorkbenchWriteResult>
+  writeText: (sessionId: string, path: string, content: string, version: WorkbenchWriteResult['version']) => Promise<WorkbenchWriteResult>
 }
 
 /** Full props for the file viewer. */
@@ -27,7 +27,7 @@ export type FileViewerProps = FileViewerInjected & {
   /** Locale-bound copy. */
   t: TranslateNS<typeof NS>
   /** Report dirty-state changes so the panel can guard tab switches. */
-  onDirtyChange?(path: string, dirty: boolean): void
+  onDirtyChange?: (path: string, dirty: boolean) => void
 }
 
 /** Markdown file extensions rendered through MarkdownText; everything else stays a highlighted code view. */
@@ -89,7 +89,7 @@ export function FileViewer({ sessionId, path, readText, writeText, t, onDirtyCha
   }, [sessionId, path, readText, onDirtyChange])
 
   const saveFile = useCallback(async (): Promise<void> => {
-    if (state.status !== 'ready' || dirty === false || saving) return
+    if (state.status !== 'ready' || ! dirty || saving) return
     if (versionRef.current === undefined) return
     setSaving(true)
     setSave({ kind: 'idle' })

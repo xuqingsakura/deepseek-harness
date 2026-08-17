@@ -120,10 +120,11 @@ function buildExtensions(
     highlightSelectionMatches(),
     keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
     EditorView.lineWrapping,
-    readOnly === true ? EditorState.readOnly.of(true) : [],
+
+    readOnly ? EditorState.readOnly.of(true) : [],
     language,
     EditorView.updateListener.of((update) => {
-      if (update.docChanged && readOnly === false) onChange?.(update.state.doc.toString())
+      if (update.docChanged && ! readOnly) onChange?.(update.state.doc.toString())
     }),
     EditorView.theme(
       {
@@ -133,7 +134,8 @@ function buildExtensions(
       },
       { dark },
     ),
-    dark === true ? oneDark : [],
+
+    dark ? oneDark : [],
   ]
 }
 
@@ -188,7 +190,6 @@ export function CodeEditor({ value, lang, readOnly = false, onChange }: CodeEdit
       view?.destroy()
     }
     // The editor re-initializes on document/language/read-only changes.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- language derives from lang; value/readOnly are intentional keys.
   }, [value, lang, readOnly])
 
   return <div ref={hostRef} className={styles.host} />

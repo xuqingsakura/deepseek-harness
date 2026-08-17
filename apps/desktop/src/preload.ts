@@ -12,7 +12,8 @@
  */
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { DesktopPluginInfo, PluginManagerResult } from './plugin-manager.ts'
+import type { BuiltinPluginInfo, DesktopPluginInfo, PluginManagerResult } from './plugin-manager.ts'
+import type { MigrationReport, MigrateOptions } from './migrate-web-data.ts'
 
 /** Must match the strip height the main process reserves (see main.ts). */
 const TITLEBAR_HEIGHT = 32
@@ -57,6 +58,10 @@ export interface DesktopBridge {
   pluginRemoveMany(names: string[]): Promise<PluginManagerResult>
   pluginSetEnabled(name: string, enabled: boolean): Promise<{ ok: boolean; bundles: string[]; enabled: boolean; liveApplied: boolean }>
   pluginOutdated(): Promise<Record<string, string>>
+  /** List bundled plugins shipped with this desktop build. */
+  pluginBuiltinList(): Promise<BuiltinPluginInfo[]>
+  /** One-click install of a bundled plugin by directory name. */
+  pluginInstallBuiltin(name: string): Promise<PluginManagerResult>
   /** Return the current updater state without triggering a check. */
   updateStatus(): Promise<DesktopUpdateState>
   /** Trigger an update check and return the current updater state. */
@@ -65,6 +70,8 @@ export interface DesktopBridge {
   updateInstall(): void
   /** Subscribe to updater-state pushes; returns the unsubscriber. */
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void
+  /** Import Web-harness data (~/.dsh) into the desktop home (safe merge). */
+  migrateWebData(options?: MigrateOptions): Promise<MigrationReport>
 }
 
 declare global {
@@ -95,7 +102,7 @@ const bridge: DesktopBridge = {
   },
   getWindowState: (): Promise<{ maximized: boolean }> => ipcRenderer.invoke('dsh:window-state'),
   onMaximized: (callback: (maximized: boolean) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, maximized: boolean): void => callback(maximized)
+    const listener = (_event: IpcRendererEvent, maximized: boolean): void =>{  callback(maximized) }
     ipcRenderer.on('dsh:maximized', listener)
     return () => ipcRenderer.removeListener('dsh:maximized', listener)
   },
@@ -111,11 +118,14 @@ const bridge: DesktopBridge = {
   pluginRemoveMany: (names: string[]) => ipcRenderer.invoke('dsh:plugin-remove-many', names) as Promise<PluginManagerResult>,
   pluginSetEnabled: (name: string, enabled: boolean) => ipcRenderer.invoke('dsh:plugin-set-enabled', name, enabled) as Promise<{ ok: boolean; bundles: string[]; enabled: boolean; liveApplied: boolean }>,
   pluginOutdated: () => ipcRenderer.invoke('dsh:plugin-outdated') as Promise<Record<string, string>>,
+  pluginBuiltinList: () => ipcRenderer.invoke('dsh:plugin-builtin-list') as Promise<BuiltinPluginInfo[]>,
+  pluginInstallBuiltin: (name: string) => ipcRenderer.invoke('dsh:plugin-builtin-install', name) as Promise<PluginManagerResult>,
   updateStatus: () => ipcRenderer.invoke('dsh:update-status') as Promise<DesktopUpdateState>,
   updateCheck: () => ipcRenderer.invoke('dsh:update-check') as Promise<DesktopUpdateState>,
   updateInstall: () => { void ipcRenderer.invoke('dsh:update-install') },
+  migrateWebData: (options?: MigrateOptions) => ipcRenderer.invoke('dsh:migrate-web-data', options ?? {}) as Promise<MigrationReport>,
   onUpdateState: (callback: (state: DesktopUpdateState) => void) => {
-    const listener = (_event: IpcRendererEvent, state: DesktopUpdateState): void => callback(state)
+    const listener = (_event: IpcRendererEvent, state: DesktopUpdateState): void =>{  callback(state) }
     ipcRenderer.on('dsh:update-state', listener)
     return () => ipcRenderer.removeListener('dsh:update-state', listener)
   },
@@ -204,9 +214,9 @@ function mountTitleBar(): void {
   const max = document.getElementById('dsh-btn-max')
   const close = document.getElementById('dsh-btn-close')
   const controls = document.getElementById('dsh-titlebar-controls')
-  min?.addEventListener('click', () => bridge.windowControl('minimize'))
-  max?.addEventListener('click', () => bridge.windowControl('maximize-toggle'))
-  close?.addEventListener('click', () => bridge.windowControl('close'))
+  min?.addEventListener('click', () =>{  bridge.windowControl('minimize') })
+  max?.addEventListener('click', () =>{  bridge.windowControl('maximize-toggle') })
+  close?.addEventListener('click', () =>{  bridge.windowControl('close') })
   host.addEventListener('dblclick', (event) => {
     if (controls !== null && controls.contains(event.target as Node)) return
     bridge.windowControl('maximize-toggle')
@@ -217,7 +227,7 @@ function mountTitleBar(): void {
     max.innerHTML = maximized ? RESTORE_ICON : MAXIMIZE_ICON
     max.title = maximized ? '还原' : '最大化'
   }
-  void bridge.getWindowState().then(state => applyMaximized(state.maximized))
+  void bridge.getWindowState().then((state) =>{  applyMaximized(state.maximized) })
   bridge.onMaximized(applyMaximized)
 }
 

@@ -63,5 +63,7 @@ describe('ui-settings-about apply', () => {
     const injected = (entry.inject as unknown as () => import('../src/client/AboutSection.tsx').AboutSectionInjected)()
     expect(injected.t('nav')).toBe('关于与更新')
     expect(injected.t('checkForUpdates')).toBe('检查更新')
+    expect(injected.t('migrateStart')).toBe('开始导入')
+    expect(injected.t('migrateSessionsCopied')).toBe('导入会话')
   })
 })

@@ -32,10 +32,10 @@ export type WorkbenchBottomTerminalProps =
  */
 export function WorkbenchBottomTerminal({ workbench, sessions, layout, t, ...verbs }: WorkbenchBottomTerminalProps) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot)
-  const currentSessionId = useSyncExternalStore(sessions.subscribe, () => sessions.getSnapshot().current)
+  const currentSessionId = useSyncExternalStore(listener => sessions.subscribe(listener), () => sessions.getSnapshot().current)
   const sessionId = state.sessionId ?? currentSessionId
   if (sessionId === undefined) return <div className={css.empty}>{t('tree.loading')}</div>
-  return <WorkbenchTerminalPanel sessionId={sessionId} onClose={() => layout.closeBottom()} t={t} {...verbs} />
+  return <WorkbenchTerminalPanel sessionId={sessionId} onClose={() =>{  layout.closeBottom() }} t={t} {...verbs} />
 }
 
 export default WorkbenchBottomTerminal

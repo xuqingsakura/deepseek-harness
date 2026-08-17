@@ -3,10 +3,12 @@
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import { DesktopPluginTab } from './DesktopPluginTab.tsx'
 import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } from './PluginInventorySettingsTab.tsx'
 import { en, zh, type PluginInventoryLocaleKey } from './locales.ts'
 
 export type { PluginInventorySettingsTabInjected, PluginInventorySettingsTabProps } from './PluginInventorySettingsTab.tsx'
+export type { DesktopPluginTabProps } from './DesktopPluginTab.tsx'
 export type { PluginInventoryLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -44,4 +46,18 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: injected,
   }, PluginInventorySettingsTab))
+
+  // The desktop plugin manager is a peer tab (desktop builds only): the
+  // Electron bridge is injected by preload before this apply runs, so its
+  // presence here is stable for the renderer lifetime.
+  if ('dshDesktop' in window) {
+    ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+      name: 'settings.plugins.tab',
+      id: 'desktop',
+      order: 20,
+      label: () => t('desktopTab'),
+      locale: NS,
+      inject: injected,
+    }, DesktopPluginTab))
+  }
 }

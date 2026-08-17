@@ -3,6 +3,7 @@
 /** Simplified Chinese dictionary and key source of truth. */
 export const zh = {
   tab: '插件列表',
+  desktopTab: '桌面端插件管理',
   loading: '正在读取插件…',
   error: '暂时无法读取插件。',
   retry: '重试',
@@ -58,6 +59,13 @@ export const zh = {
   removedMany: '已移除 {count} 个插件，重启后生效。',
   mountFailed: '挂载失败',
   selectForBatch: '选择此插件进行批量操作',
+  builtinHeading: '内置插件',
+  builtinHint: '随桌面端一起发布的开箱即用插件，一键安装，无需输入路径。',
+  builtinInstall: '安装',
+  builtinInstalled: '已安装',
+  builtinInstalling: '安装中…',
+  builtinInstalledRestart: '已安装，重启后生效。',
+  builtinNone: '当前版本没有附带内置插件。',
 } satisfies Record<string, string>
 
 /** Plugin inventory locale key union. */
@@ -66,6 +74,7 @@ export type PluginInventoryLocaleKey = keyof typeof zh
 /** English dictionary checked against the Chinese key set. */
 export const en = {
   tab: 'Plugin list',
+  desktopTab: 'Desktop plugin management',
   loading: 'Reading plugins…',
   error: 'Plugins are temporarily unavailable.',
   retry: 'Retry',
@@ -121,4 +130,11 @@ export const en = {
   removedMany: 'Removed {count} plugins; restart to activate.',
   mountFailed: 'Mount failed',
   selectForBatch: 'Select this plugin for batch operations',
+  builtinHeading: 'Built-in plugins',
+  builtinHint: 'Out-of-the-box plugins shipped with the desktop; one-click install, no path entry needed.',
+  builtinInstall: 'Install',
+  builtinInstalled: 'Installed',
+  builtinInstalling: 'Installing…',
+  builtinInstalledRestart: 'Installed; restart to activate.',
+  builtinNone: 'This build ships no built-in plugins.',
 } satisfies Record<PluginInventoryLocaleKey, string>

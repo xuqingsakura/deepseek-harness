@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-17-desktop-workbench-plugin-split.md
-2026-08-17-desktop-workbench-plugin-split.md: d66e93051ed998be96d80cecb78543372f2a381f
+2026-08-17-desktop-workbench-plugin-split.md: 0a0f815d9c615100bea4c1cd1eb73198150c8dad
 2026-08-17-desktop-workbench-plugin-split.zh.md: dc2fdb893f804db6fff8b96e4e6b1c4ace8a7517

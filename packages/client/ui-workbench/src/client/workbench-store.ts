@@ -1,5 +1,5 @@
 /** Which sidebar panel the workbench view shows. */
-export type WorkbenchSidebarTab = 'files' | 'terminal' | 'git' | 'tasks'
+export type WorkbenchSidebarTab = 'files' | 'terminal' | 'git' | 'tasks' | 'browser'
 
 /**
  * The workbench's shared viewing state: whether the panel is open, which
@@ -21,27 +21,31 @@ export interface WorkbenchViewState {
   activePath: string | undefined
   /** The selected sidebar panel. */
   tab: WorkbenchSidebarTab
+  /** The in-workbench browser's current URL ('' = blank start page). */
+  browserUrl: string
   /** The Git change whose diff is open in the center viewer (undefined = file content view). */
   diff: { path: string; staged: boolean } | undefined
 }
 
 /** Snapshot/subscribe/update handle handed to workbench components. */
 export interface WorkbenchStateHandle {
-  getSnapshot(): WorkbenchViewState
-  subscribe(listener: () => void): () => void
-  set(patch: Partial<WorkbenchViewState>): void
+  getSnapshot: () => WorkbenchViewState
+  subscribe: (listener: () => void) => () => void
+  set: (patch: Partial<WorkbenchViewState>) => void
   /** Open a file: append it to the tab bar once and activate it (exits diff view). */
-  open(path: string): void
+  open: (path: string) => void
   /** Open a Git change's diff in the center viewer. */
-  openDiff(path: string, staged: boolean): void
+  openDiff: (path: string, staged: boolean) => void
   /** Close the diff view and return to the file content view. */
-  clearDiff(): void
+  clearDiff: () => void
   /** Close a file tab; closing the active file activates its tab neighbor. */
-  close(path: string): void
+  close: (path: string) => void
   /** Close every tab except one; the survivor becomes active. */
-  closeOthers(path: string): void
+  closeOthers: (path: string) => void
   /** Close every tab. */
-  closeAll(): void
+  closeAll: () => void
+  /** Navigate the in-workbench browser to a URL (empty = blank). */
+  navigateBrowser: (url: string) => void
 }
 
 /**
@@ -49,7 +53,7 @@ export interface WorkbenchStateHandle {
  * @returns the live handle; one instance per plugin activation.
  */
 export function createWorkbenchState(): WorkbenchStateHandle {
-  let state: WorkbenchViewState = { open: false, sessionId: undefined, openPaths: [], activePath: undefined, tab: 'files', diff: undefined }
+  let state: WorkbenchViewState = { open: false, sessionId: undefined, openPaths: [], activePath: undefined, tab: 'files', diff: undefined, browserUrl: 'https://www.deepseek.com' }
   const listeners = new Set<() => void>()
   const notify = (): void => { for (const listener of [...listeners]) listener() }
   return {
@@ -95,6 +99,10 @@ export function createWorkbenchState(): WorkbenchStateHandle {
     },
     closeAll: () => {
       state = { ...state, openPaths: [], activePath: undefined }
+      notify()
+    },
+    navigateBrowser: (url) => {
+      state = { ...state, browserUrl: url }
       notify()
     },
   }

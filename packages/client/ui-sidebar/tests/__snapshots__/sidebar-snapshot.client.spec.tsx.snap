@@ -63,6 +63,10 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
           xmlns="http://www.w3.org/2000/svg"
         />
       </button>
+      <div
+        data-slot="sidebar.settings"
+        style="display: contents;"
+      />
     </div>
     <div
       class="panel"
@@ -111,14 +115,6 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
         >
           <div
             data-slot="sidebar.footer.action"
-            style="display: contents;"
-          />
-        </div>
-        <div
-          class="settingsArea"
-        >
-          <div
-            data-slot="sidebar.settings"
             style="display: contents;"
           />
         </div>
@@ -191,6 +187,10 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
           xmlns="http://www.w3.org/2000/svg"
         />
       </button>
+      <div
+        data-slot="sidebar.settings"
+        style="display: contents;"
+      />
     </div>
     <div
       class="panel"
@@ -239,14 +239,6 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
         >
           <div
             data-slot="sidebar.footer.action"
-            style="display: contents;"
-          />
-        </div>
-        <div
-          class="settingsArea"
-        >
-          <div
-            data-slot="sidebar.settings"
             style="display: contents;"
           />
         </div>
@@ -319,6 +311,10 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
           xmlns="http://www.w3.org/2000/svg"
         />
       </button>
+      <div
+        data-slot="sidebar.settings"
+        style="display: contents;"
+      />
     </div>
     <div
       class="panel"
@@ -367,14 +363,6 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
         >
           <div
             data-slot="sidebar.footer.action"
-            style="display: contents;"
-          />
-        </div>
-        <div
-          class="settingsArea"
-        >
-          <div
-            data-slot="sidebar.settings"
             style="display: contents;"
           />
         </div>

@@ -55,9 +55,9 @@ export function browsePickerOverlayPath(): string {
 function isLoopbackPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = createServer()
-    server.once('error', () => resolve(false))
+    server.once('error', () =>{  resolve(false) })
     server.listen({ host: '127.0.0.1', port }, () => {
-      server.close(() => resolve(true))
+      server.close(() =>{  resolve(true) })
     })
   })
 }
@@ -89,7 +89,7 @@ function deferred(): Deferred {
 
 /** The settled root context surface this module reads from the runtime. */
 interface BootContext {
-  get<T = unknown>(key: string): T | undefined
+  get: (key: string) => unknown
   fiber: { dispose(): Promise<void> }
 }
 
@@ -114,7 +114,7 @@ interface DshEmbedModule {
 }
 
 interface CmdlineModule {
-  provideCmdline(ctx: BootContext, host: { args: readonly string[]; exit: (code: number) => void }): void
+  provideCmdline: (ctx: BootContext, host: { args: readonly string[]; exit: (code: number) => void }) => void
 }
 
 interface LaunchEnvironmentModule {
@@ -198,20 +198,19 @@ export async function startHostInProcess(options: {
     const composed = embed.composeProfile(WEB_PROFILE, [overlayPath])
     const rootConfig = join(composed.profile.dir, embed.PROFILE_ROOT_FILENAME)
     ctx = await appBoot.boot('dsh-desktop', rootConfig, structuredClone(embed.allPatches(composed)), (hostCtx) => {
-      const provide = (hostCtx as unknown as { provide(key: string, value: unknown): void }).provide
-      provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
+      (hostCtx as unknown as { provide(key: string, value: unknown): void }).provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
       provideCmdline(hostCtx, {
         args: webArgs,
         exit: code => void dispose().then(() => onExit?.(code)),
       })
     })
-    const webserver = ctx.get<{ port: number }>('webServer')
+    const webserver = ctx.get('webServer') as { port: number } | undefined
     if (webserver === undefined) {
       throw new Error('dsh-desktop: in-process host booted without a webServer service')
     }
     // Report which directory-picker interaction the composed tree actually
     // mounted, so the shell (and its smoke) can verify the browse pin.
-    const loader = ctx.get<{ entries(): Iterable<{ id: string; disabled: boolean }> }>('loader')
+    const loader = ctx.get('loader') as { entries(): Iterable<{ id: string; disabled: boolean }> } | undefined
     let directoryPicker: 'browse' | 'auto' | 'none' = 'none'
     if (loader !== undefined) {
       // Row ids arrive include-prefixed (e.g. `include:directory-picker`).
@@ -222,7 +221,7 @@ export async function startHostInProcess(options: {
     const controls: InProcessHostControls = {
       async setPluginEnabled(name, enabled) {
         if (ctx === undefined) return false
-        const loader = ctx.get<{ entries(): Iterable<HostLoaderEntry> }>('loader')
+        const loader = ctx.get('loader') as { entries(): Iterable<HostLoaderEntry> } | undefined
         if (loader === undefined) return false
         for (const entry of loader.entries()) {
           if (entry.options.name !== name) continue

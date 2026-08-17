@@ -152,7 +152,7 @@ export function apply(ctx: ClientContext): void {
       const result = await ctx.remote.workbench.fsRemove(sessionId, path, recursive)
       if (!result.ok) throw remoteFailure('fsRemove', result.error)
     },
-    writeText: async (sessionId, path, content, version: WorkbenchWriteResult['version']) => {
+    writeText: async (sessionId, path, content, version?: WorkbenchWriteResult['version']) => {
       const result = await ctx.remote.workbench.writeText(sessionId, path, content, version)
       if (!result.ok) throw remoteFailure('writeText', result.error)
       return result.value

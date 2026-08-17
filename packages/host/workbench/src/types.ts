@@ -127,6 +127,8 @@ export interface WorkbenchGitLogEntry {
   date: string
   /** First subject line. */
   message: string
+  /** Parent commit hashes (first parent first; empty for a root commit). */
+  parents: string[]
 }
 
 /** The unified diff of one path against the index/HEAD. */

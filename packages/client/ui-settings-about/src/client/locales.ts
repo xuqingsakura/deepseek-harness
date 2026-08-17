@@ -17,6 +17,21 @@ export const en = {
   statusUpToDate: 'You are on the latest version',
   statusError: 'Update check failed',
   unknown: 'Unknown',
+  migrateTitle: 'Import data from Web version',
+  migrateIntro: 'Import conversations and workspaces from the Web version (home directory ~/.dsh). Existing data in this app is never overwritten.',
+  migrateSource: 'Source',
+  migrateTarget: 'Target',
+  migrateTargetDefault: 'this app home',
+  migratePreview: 'Preview import',
+  migrateStart: 'Start import',
+  migrateRunning: 'Working…',
+  migrateIncludeSettings: 'Also import settings',
+  migrateIncludeCredentials: 'Also import credentials',
+  migrateSessionsCopied: 'Conversations imported',
+  migrateSessionsSkipped: 'Already present, skipped',
+  migrateStoragesMerged: 'Storage records merged',
+  migrateErrors: 'Errors',
+  migrateDryRunHint: 'Preview makes no changes.',
 }
 
 /** Simplified Chinese strings. */
@@ -36,6 +51,21 @@ export const zh = {
   statusUpToDate: '已是最新版本',
   statusError: '检查更新失败',
   unknown: '未知',
+  migrateTitle: '从 Web 版导入数据',
+  migrateIntro: '将 Web 版（数据目录 ~/.dsh）中的对话记录与工作区数据导入本应用，不会覆盖本应用已有的数据。',
+  migrateSource: '数据来源',
+  migrateTarget: '导入位置',
+  migrateTargetDefault: '本应用数据目录',
+  migratePreview: '预览导入',
+  migrateStart: '开始导入',
+  migrateRunning: '处理中…',
+  migrateIncludeSettings: '同时导入设置',
+  migrateIncludeCredentials: '同时导入凭据',
+  migrateSessionsCopied: '导入会话',
+  migrateSessionsSkipped: '跳过已有会话',
+  migrateStoragesMerged: '合并存储记录',
+  migrateErrors: '错误',
+  migrateDryRunHint: '预览不会改动任何文件。',
 }
 
 export type AboutKey = keyof typeof en

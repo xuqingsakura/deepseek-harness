@@ -44,6 +44,13 @@
             reasoningEfforts:
               off:
               high: high
+      # OpenCode Zen and OpenCode Zen Go are separate catalog routes sharing
+      # one credential. Neither ships a provider-level endpoint: every catalog
+      # model carries its own base URL, so no baseURL is configured here.
+      opencode:
+        apiKeyEnv: OPENCODE_API_KEY
+      opencode-go:
+        apiKeyEnv: OPENCODE_API_KEY
       # Hand-declared route: pi-ai ships nothing under this key, so the profile
       # supplies the whole provider.
       acme-gateway:

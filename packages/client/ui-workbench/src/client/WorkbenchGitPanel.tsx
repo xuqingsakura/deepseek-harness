@@ -3,7 +3,7 @@
  * overflow menu, and a recent-commit history list. Clicking a change row
  * opens that file's diff in the center-column viewer. */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type {
   WorkbenchGitBranch,
   WorkbenchGitChange,
@@ -14,32 +14,33 @@ import type {
 import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
+import { buildGitGraph } from './git-graph.ts'
 import css from './WorkbenchGitPanel.module.css'
 
 /** The injected git verbs the panel hands down. */
 export interface WorkbenchGitPanelInjected {
   /** Project the working-tree status. */
-  gitStatus(sessionId: string): Promise<WorkbenchGitStatusResult>
+  gitStatus: (sessionId: string) => Promise<WorkbenchGitStatusResult>
   /** Unified diff of one path (or the whole tree). */
-  gitDiff(sessionId: string, path?: string, staged?: boolean): Promise<WorkbenchGitDiffResult>
+  gitDiff: (sessionId: string, path?: string, staged?: boolean) => Promise<WorkbenchGitDiffResult>
   /** Recent commit history. */
-  gitLog(sessionId: string, limit?: number): Promise<WorkbenchGitLogEntry[]>
+  gitLog: (sessionId: string, limit?: number) => Promise<WorkbenchGitLogEntry[]>
   /** Local branches with the checked-out one flagged. */
-  gitBranches(sessionId: string): Promise<WorkbenchGitBranch[]>
+  gitBranches: (sessionId: string) => Promise<WorkbenchGitBranch[]>
   /** Stage paths (empty = all). */
-  gitAdd(sessionId: string, paths?: string[]): Promise<void>
+  gitAdd: (sessionId: string, paths?: string[]) => Promise<void>
   /** Discard worktree changes or unstage index entries. */
-  gitRestore(sessionId: string, paths: string[], staged?: boolean): Promise<void>
+  gitRestore: (sessionId: string, paths: string[], staged?: boolean) => Promise<void>
   /** Commit the staged changes. */
-  gitCommit(sessionId: string, message: string): Promise<void>
+  gitCommit: (sessionId: string, message: string) => Promise<void>
   /** Check out one local branch. */
-  gitCheckout(sessionId: string, branch: string): Promise<void>
+  gitCheckout: (sessionId: string, branch: string) => Promise<void>
   /** Fetch from the configured upstream. */
-  gitFetch(sessionId: string, remote?: string): Promise<void>
+  gitFetch: (sessionId: string, remote?: string) => Promise<void>
   /** Pull the current branch. */
-  gitPull(sessionId: string): Promise<void>
+  gitPull: (sessionId: string) => Promise<void>
   /** Push the current branch. */
-  gitPush(sessionId: string, remote?: string, branch?: string): Promise<void>
+  gitPush: (sessionId: string, remote?: string, branch?: string) => Promise<void>
 }
 
 /** Full props for the git panel. */
@@ -47,7 +48,7 @@ export type WorkbenchGitPanelProps = WorkbenchGitPanelInjected & {
   /** The conversation whose cwd holds the repository. */
   sessionId: string
   /** Open a changed file's diff in the center-column viewer (VSCode click-to-open). */
-  onOpenDiff(path: string, staged: boolean): void
+  onOpenDiff: (path: string, staged: boolean) => void
   /** Locale-bound copy. */
   t: TranslateNS<typeof NS>
 }
@@ -91,6 +92,7 @@ export function WorkbenchGitPanel({
   const [moreOpen, setMoreOpen] = useState(false)
   /** Change groups collapsed by the user (folded file lists). */
   const [collapsed, setCollapsed] = useState<ReadonlySet<'staged' | 'unstaged' | 'untracked'>>(() => new Set())
+  const graph = useMemo(() => buildGitGraph(log), [log])
   // Keep the latest verbs without retriggering on inline prop identity.
   const verbs = useRef({ gitStatus, gitDiff, gitLog, gitBranches, gitAdd, gitRestore, gitCommit, gitCheckout, gitFetch, gitPull, gitPush })
   verbs.current = { gitStatus, gitDiff, gitLog, gitBranches, gitAdd, gitRestore, gitCommit, gitCheckout, gitFetch, gitPull, gitPush }
@@ -168,7 +170,7 @@ export function WorkbenchGitPanel({
         {status?.isRepo === true ? (
           <Menu
             open={moreOpen}
-            onClose={() => setMoreOpen(false)}
+            onClose={() =>{  setMoreOpen(false) }}
             portal
             align="end"
             items={[
@@ -194,7 +196,7 @@ export function WorkbenchGitPanel({
                 disabled={busy}
                 aria-label={t('git.more')}
                 title={t('git.more')}
-                onClick={() => setMoreOpen(open => !open)}
+                onClick={() =>{  setMoreOpen(open => !open) }}
               >
                 ⋯
               </button>
@@ -212,8 +214,8 @@ export function WorkbenchGitPanel({
         <div className={css.branchRow}>
           <select
             className={css.select}
-            value={status?.branch ?? ''}
-            onChange={event => checkout(event.target.value)}
+            value={status.branch}
+            onChange={(event) =>{  checkout(event.target.value) }}
             aria-label={t('git.branchAria')}
           >
             {branches.map(branch => (
@@ -223,7 +225,7 @@ export function WorkbenchGitPanel({
         </div>
       ) : null}
 
-      {status !== undefined && status.isRepo === false ? (
+      {status !== undefined && ! status.isRepo ? (
         <div className={css.empty}>{t('git.noRepo')}</div>
       ) : (
         <>
@@ -240,13 +242,13 @@ export function WorkbenchGitPanel({
                       label={t('git.staged')}
                       count={groups.staged.length}
                       collapsed={collapsed.has('staged')}
-                      onToggle={() => toggleGroup('staged')}
+                      onToggle={() =>{  toggleGroup('staged') }}
                     >
                       {groups.staged.map(change => (
                         <ChangeRow
                           key={change.path}
                           change={change}
-                          onOpenDiff={() => onOpenDiff(change.path, true)}
+                          onOpenDiff={() =>{  onOpenDiff(change.path, true) }}
                           onUnstage={() => void run(() => verbs.current.gitRestore(sessionId, [change.path], true))}
                           t={t}
                         />
@@ -258,13 +260,13 @@ export function WorkbenchGitPanel({
                       label={t('git.unstaged')}
                       count={groups.unstaged.length}
                       collapsed={collapsed.has('unstaged')}
-                      onToggle={() => toggleGroup('unstaged')}
+                      onToggle={() =>{  toggleGroup('unstaged') }}
                     >
                       {groups.unstaged.map(change => (
                         <ChangeRow
                           key={change.path}
                           change={change}
-                          onOpenDiff={() => onOpenDiff(change.path, false)}
+                          onOpenDiff={() =>{  onOpenDiff(change.path, false) }}
                           onStage={() => void run(() => verbs.current.gitAdd(sessionId, [change.path]))}
                           onDiscard={() => {
                             if (window.confirm(t('git.discardConfirm', { count: '1' }))) {
@@ -281,13 +283,13 @@ export function WorkbenchGitPanel({
                       label={t('git.untracked')}
                       count={groups.untracked.length}
                       collapsed={collapsed.has('untracked')}
-                      onToggle={() => toggleGroup('untracked')}
+                      onToggle={() =>{  toggleGroup('untracked') }}
                     >
                       {groups.untracked.map(change => (
                         <ChangeRow
                           key={change.path}
                           change={change}
-                          onOpenDiff={() => onOpenDiff(change.path, false)}
+                          onOpenDiff={() =>{  onOpenDiff(change.path, false) }}
                           onStage={() => void run(() => verbs.current.gitAdd(sessionId, [change.path]))}
                           t={t}
                         />
@@ -304,11 +306,28 @@ export function WorkbenchGitPanel({
               <div className={css.hint}>{t('git.noCommits')}</div>
             ) : (
               <ul className={css.historyList}>
-                {log.map(entry => (
-                  <li key={entry.hash} className={css.historyRow} title={`${entry.hash}\n${entry.author} · ${entry.date}`}>
-                    <span className={css.historyHash}>{entry.shortHash}</span>
-                    <span className={css.historyMessage}>{entry.message}</span>
-                    <span className={css.historyAuthor}>{entry.author}</span>
+                {graph.map(row => (
+                  <li key={row.commit.hash} className={css.graphRow} title={`${row.commit.hash}\n${row.commit.author} · ${row.commit.date}`}>
+                    <span className={css.graphCells} aria-hidden="true">
+                      {row.cells.map((cell, index) => (
+                        <span
+                          key={index}
+                          className={
+                            cell === 'empty'
+                              ? css.graphEmpty
+                              : cell === 'edge'
+                                ? css.graphEdge
+                                : css.graphNode
+                          }
+                        />
+                      ))}
+                    </span>
+                    <span className={css.graphHash}>{row.commit.shortHash}</span>
+                    <span className={css.graphMessage}>
+                      {row.commit.message}
+                      {row.merge ? <span className={css.graphMergeTag}>{t('git.merge')}</span> : null}
+                    </span>
+                    <span className={css.graphAuthor}>{row.commit.author}</span>
                   </li>
                 ))}
               </ul>
@@ -318,7 +337,7 @@ export function WorkbenchGitPanel({
             <input
               className={css.commitInput}
               value={message}
-              onChange={event => setMessage(event.target.value)}
+              onChange={(event) =>{  setMessage(event.target.value) }}
               placeholder={t('git.commitPlaceholder')}
               onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) commit() }}
             />
@@ -340,7 +359,7 @@ function GroupSection({
   label: string
   count: number
   collapsed: boolean
-  onToggle(): void
+  onToggle: () => void
   children: ReactNode
 }) {
   return (
@@ -359,10 +378,10 @@ function ChangeRow({
   change, onOpenDiff, onStage, onUnstage, onDiscard, t,
 }: {
   change: WorkbenchGitChange
-  onOpenDiff(): void
-  onStage?(): void
-  onUnstage?(): void
-  onDiscard?(): void
+  onOpenDiff: () => void
+  onStage?: () => void
+  onUnstage?: () => void
+  onDiscard?: () => void
   t: TranslateNS<typeof NS>
 }) {
   return (

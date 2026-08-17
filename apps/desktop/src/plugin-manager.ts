@@ -11,7 +11,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -22,14 +22,14 @@ const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
 
 /** The runtime closure root: dev uses the deployed copy, packaged uses resources. */
 function closureRoot(): string {
-  return process.resourcesPath !== undefined
+  return process.resourcesPath
     ? join(process.resourcesPath, 'runtime', 'host-deploy')
     : join(APP_ROOT, 'out', 'runtime', 'host-deploy')
 }
 
 /** Absolute path of the vendored pnpm executable. */
 function pnpmExecutable(): string {
-  return process.resourcesPath !== undefined
+  return process.resourcesPath
     ? join(process.resourcesPath, 'pnpm', 'pnpm.exe')
     : join(APP_ROOT, 'runtime', 'pnpm', 'pnpm.exe')
 }
@@ -48,6 +48,8 @@ interface AppBootApi {
 /** A profile manifest: package name, dependencies, and the bundle layer list. */
 interface ProfileManifest {
   name?: string
+  version?: string
+  description?: string
   private?: boolean
   dependencies?: Record<string, string>
   dsh?: {
@@ -104,7 +106,7 @@ function profileDirFor(home: string): string {
 }
 /** The application install root (parent of resources/); plugin homes must never live inside it. */
 function installRoot(): string | undefined {
-  return process.resourcesPath !== undefined ? resolve(dirname(process.resourcesPath)) : undefined
+  return process.resourcesPath ? resolve(dirname(process.resourcesPath)) : undefined
 }
 
 /**
@@ -237,7 +239,7 @@ function runPnpm(dir: string, args: readonly string[], proxy: PluginProxyConfig)
     windowsHide: true,
     env: pnpmEnv(proxy),
   })
-  const output = [result.stdout, result.stderr].filter((part): part is string => part !== null).join('')
+  const output = [result.stdout, result.stderr].filter((part): part is string => typeof part === 'string').join('')
   if (result.error !== undefined) {
     throw new Error(`pnpm failed to start: ${String(result.error)}`)
   }
@@ -246,7 +248,6 @@ function runPnpm(dir: string, args: readonly string[], proxy: PluginProxyConfig)
 
 /** Strip ANSI color escapes pnpm may emit even when stdout is a pipe. */
 function stripAnsi(text: string): string {
-  // eslint-disable-next-line no-control-regex
   return text.replace(/\u001b\[[0-9;]*m/g, '')
 }
 
@@ -354,6 +355,69 @@ export async function installPlugin(home: string, spec: string): Promise<PluginM
     bundles: after.dsh?.profile?.bundles ?? [],
     allowBuilds: parseAllowBuildHints(output),
   }
+}
+
+/** A bundled plugin shipped inside the desktop resources (dev: apps/desktop/plugins). */
+export interface BuiltinPluginInfo {
+  name: string
+  version: string | undefined
+  description: string | undefined
+  /** Absolute directory of the bundled plugin package. */
+  dir: string
+}
+
+/** Absolute directory of the bundled plugins root (resources/plugins packaged, apps/desktop/plugins dev). */
+function builtinPluginsRoot(): string {
+  return process.resourcesPath
+    ? join(process.resourcesPath, 'plugins')
+    : join(APP_ROOT, 'plugins')
+}
+
+/**
+ * List the bundled plugins shipped with the desktop. Each is a directory
+ * under the bundled plugins root declaring `dsh.bundle.patch`, ready to
+ * install with a one-click `file:` spec (no path typing needed).
+ * @returns the bundled plugin descriptors present in the current build.
+ */
+export function listBuiltinPlugins(): BuiltinPluginInfo[] {
+  const root = builtinPluginsRoot()
+  if (!existsSync(root)) return []
+  const out: BuiltinPluginInfo[] = []
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = join(root, entry.name)
+    const manifestPath = join(dir, 'package.json')
+    if (!existsSync(manifestPath)) continue
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as ProfileManifest
+      if (manifest.dsh?.bundle?.patch === undefined) continue
+      out.push({
+        name: entry.name,
+        version: manifest.version,
+        description: manifest.description,
+        dir,
+      })
+    } catch {
+      // A malformed bundled plugin is not a user-facing plugin; skip it.
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Install a bundled plugin by its directory name (e.g. "dsh-workbench")
+ * through the official `file:` profile-plugin flow — the same reconcile as
+ * any external plugin, with no manual path entry.
+ * @param home - the harness home.
+ * @param name - the bundled plugin directory name.
+ * @returns the standard plugin-operation result.
+ */
+export async function installBuiltinPlugin(home: string, name: string): Promise<PluginManagerResult> {
+  const found = listBuiltinPlugins().find(plugin => plugin.name === name)
+  if (found === undefined) {
+    throw new Error('dsh-plugin: 内置插件 ' + JSON.stringify(name) + ' 不存在')
+  }
+  return installPlugin(home, 'file:' + found.dir)
 }
 
 /** Remove a plugin by package name (pnpm remove + reconcile). */

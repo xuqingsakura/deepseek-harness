@@ -10,8 +10,8 @@
  * @module @deepseek-ai/dsh-desktop/deploy-runtime
  */
 
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync, copyFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -79,8 +79,8 @@ writeFileSync(join(RUNTIME_DSH_LIB, 'embed.js'), embed)
  * - `vite` is declared by `dsh-web-frontend` for its dev workflow; no production module imports it.
  * - `node-pty` ships prebuilds for every platform; keep only `win32-x64`.
  * - Test toolchains (`vitest`/`@vitest`/`@testing-library`/`rollup`/`@rollup`), the
- *   dev TS runner (`tsx`/`esbuild`/`@esbuild`), and dropped-provider deps
- *   (`@google`, `@agentclientprotocol`) have no runtime importers.
+ *   dev TS runner (`tsx`/`esbuild`/`@esbuild`), and `@agentclientprotocol`
+ *   (an ACP-only dep) has no runtime importer in the web profile.
  * - Test-support and non-web-profile packages (`dsh-acp*`, `dsh-headless`,
  *   `dsh-e2b*`, `dsh-subagent-acp`/`-dsh-sdk`/`-codex`) are never mounted.
  */
@@ -105,7 +105,6 @@ function pruneClosure() {
   }
   removeDir(join(modulesRoot, 'typescript'))
   removeDir(join(modulesRoot, 'vite'))
-  removeDir(join(modulesRoot, '@anthropic-ai'))
   removeDir(join(modulesRoot, '@deepseek-ai', 'dsh-subagent-claude-code'))
   removeDir(join(modulesRoot, '@deepseek-ai', 'dsh-typert-generator'))
   // Test toolchains and dev runners: their only importers are the test-support
@@ -118,7 +117,6 @@ function pruneClosure() {
   removeDir(join(modulesRoot, 'tsx'))
   removeDir(join(modulesRoot, 'esbuild'))
   removeDir(join(modulesRoot, '@esbuild'))
-  removeDir(join(modulesRoot, '@google'))
   removeDir(join(modulesRoot, '@agentclientprotocol'))
   // Test-support and non-web-profile packages: the desktop boots the web
   // profile only, and none of these are mounted or imported at runtime.
@@ -154,20 +152,20 @@ console.log(`deploy-runtime: refreshed ${RUNTIME_DSH_LIB}`)
 console.log(`deploy-runtime: embed.js -> ${bundleName} (${exportsList.length} exports)`)
 pruneClosure()
 
-/** Provider slugs the desktop keeps in pi-ai's builtin catalog (DeepSeek + Xiaomi/MiMo family + shared image provider). */
+/** Provider slugs the desktop keeps in pi-ai's builtin catalog (DeepSeek, Xiaomi/MiMo, OpenCode Zen/Zen Go, and the shared image provider). */
 const PI_AI_KEEP_PROVIDERS = new Set([
   'deepseek', 'xiaomi', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn',
-  'xiaomi-token-plan-sgp', 'openrouter-images', 'faux',
+  'xiaomi-token-plan-sgp', 'opencode', 'opencode-go', 'openrouter-images', 'faux',
 ])
 /** Non-lazy pi-ai API implementations for dropped providers; their .lazy wrappers stay (dsh-llm-pi-ai imports them). */
 const PI_AI_DROPPED_API_IMPLS = new Set([
-  'anthropic-messages.js', 'azure-openai-responses.js', 'bedrock-converse-stream.js',
-  'google-generative-ai.js', 'google-vertex.js', 'mistral-conversations.js',
+  'azure-openai-responses.js', 'bedrock-converse-stream.js',
+  'google-vertex.js', 'mistral-conversations.js',
   'openai-codex-responses.js',
 ])
 
 /**
- * Trim pi-ai's builtin provider catalog to DeepSeek + the Xiaomi (MiMo) family.
+ * Trim pi-ai's builtin provider catalog to DeepSeek + the Xiaomi (MiMo) + OpenCode (Zen/Zen Go) families.
  * The web profile only mounts `llm-deepseek` and `llm-pi-ai`, yet pi-ai's
  * `providers/all.js` catalog (loaded eagerly by dsh-llm-pi-ai) statically
  * imports ~33 vendor entries. Keep the deepseek/xiaomi entries and drop the
@@ -181,6 +179,31 @@ function trimPiAiProviders() {
   const dist = join(modulesRoot, '@earendil-works', 'pi-ai', 'dist')
   if (!existsSync(dist)) return
   let removed = 0
+  // The desktop starts from the pristine catalog every deploy (the previous
+  // run may have trimmed it), so restore the full set first. Provider slugs
+  // come from all.js imports; helper files (github-copilot-headers.js,
+  // google-shared.js, ...) imported by kept APIs are NOT provider entries and
+  // must survive the trim.
+  const srcProviders = join(findInStore('@earendil-works/pi-ai'), 'dist', 'providers')
+  if (existsSync(srcProviders)) {
+    rmSync(join(dist, 'providers'), { recursive: true, force: true })
+    copyDir(srcProviders, join(dist, 'providers'))
+  }
+  const srcModels = join(findInStore('@earendil-works/pi-ai'), 'dist', 'models.generated.js')
+  if (existsSync(srcModels)) copyFileSync(srcModels, join(dist, 'models.generated.js'))
+  // The api/ directory holds the non-lazy backends AND shared helpers
+  // (github-copilot-headers.js, google-shared.js, ...) kept APIs import;
+  // restore it wholesale and let the dropped-impl set prune the extras.
+  const srcApi = join(findInStore('@earendil-works/pi-ai'), 'dist', 'api')
+  if (existsSync(srcApi)) {
+    rmSync(join(dist, 'api'), { recursive: true, force: true })
+    copyDir(srcApi, join(dist, 'api'))
+  }
+  const providerSlugs = new Set()
+  for (const line of readFileSync(join(dist, 'providers', 'all.js'), 'utf8').split(/\r?\n/)) {
+    const imp = /^import \{ \w+ \} from "\.\/([a-z0-9-]+)\.js";$/.exec(line)
+    if (imp !== null) providerSlugs.add(imp[1])
+  }
   const removeFile = (file) => {
     if (!existsSync(file)) return
     rmSync(file, { force: true })
@@ -195,7 +218,7 @@ function trimPiAiProviders() {
   }
   const droppedImports = new Set()
   const keptAllExports = new Set(['deepseekProvider', 'xiaomiProvider', 'xiaomiTokenPlanAmsProvider',
-    'xiaomiTokenPlanCnProvider', 'xiaomiTokenPlanSgpProvider', 'openrouterImagesProvider',
+    'xiaomiTokenPlanCnProvider', 'xiaomiTokenPlanSgpProvider', 'opencodeProvider', 'opencodeGoProvider', 'openrouterImagesProvider',
     'getBuiltinModel', 'getBuiltinProviders', 'getBuiltinModelDataGeneratedAt', 'getBuiltinModels',
     'builtinProviders', 'builtinModels', 'builtinImagesProviders', 'builtinImagesModels'])
   rewrite(join('providers', 'all.js'), (line) => {
@@ -219,15 +242,13 @@ function trimPiAiProviders() {
   for (const file of readdirSync(providersDir)) {
     if (!file.endsWith('.js') || file === 'all.js') continue
     const slug = file.replace(/\.models\.js$/, '').replace(/\.js$/, '')
-    if (PI_AI_KEEP_PROVIDERS.has(slug)) continue
-    removeFile(join(providersDir, file))
+    if (providerSlugs.has(slug) && !PI_AI_KEEP_PROVIDERS.has(slug)) removeFile(join(providersDir, file))
   }
   const dataDir = join(providersDir, 'data')
   for (const file of readdirSync(dataDir)) {
     if (file === '.manifest.json') continue
     const slug = file.replace(/\.json$/, '')
-    if (PI_AI_KEEP_PROVIDERS.has(slug)) continue
-    removeFile(join(dataDir, file))
+    if (providerSlugs.has(slug) && !PI_AI_KEEP_PROVIDERS.has(slug)) removeFile(join(dataDir, file))
   }
   for (const file of PI_AI_DROPPED_API_IMPLS) {
     removeFile(join(dist, 'api', file))
@@ -238,10 +259,8 @@ function trimPiAiProviders() {
     removed += readdirSync(dir, { recursive: true }).length
     rmSync(dir, { recursive: true, force: true })
   }
-  console.log(`deploy-runtime: pi-ai trimmed to DeepSeek + Xiaomi/MiMo (${removed} entries removed)`)
+  console.log(`deploy-runtime: pi-ai trimmed to DeepSeek + Xiaomi/MiMo + OpenCode (${removed} entries removed)`)
 }
-
-trimPiAiProviders()
 
 /** MiMo model ids the api.xiaomimimo.com endpoint actually accepts (verified by real calls, 2026-08-14). */
 const XIAOMI_SUPPORTED_MODELS = new Set(['mimo-v2.5', 'mimo-v2.5-pro'])
@@ -271,3 +290,115 @@ function fixXiaomiModels() {
 }
 
 fixXiaomiModels()
+
+/** Debug/build artifacts skipped when syncing workspace libs into the closure. */
+const SKIP_DEBUG_ARTIFACT = /\.(map|d\.ts|d\.mts|d\.cts|ts|tsbuildinfo|pdb)$/i
+
+/** Locate one package's real directory inside the pnpm store. */
+function findInStore(name) {
+  const pnpmStore = resolve(APP_ROOT, '..', '..', 'node_modules', '.pnpm')
+  const key = name.startsWith('@') ? name.replace('/', '+') : name
+  for (const dir of readdirSync(pnpmStore)) {
+    if (!dir.startsWith(key)) continue
+    const candidate = join(pnpmStore, dir, 'node_modules', name)
+    if (existsSync(candidate)) return candidate
+  }
+  return undefined
+}
+
+/** Recursively copy a directory, skipping debug/build artifacts. */
+function copyDir(srcDir, destDir) {
+  mkdirSync(destDir, { recursive: true })
+  for (const file of readdirSync(srcDir)) {
+    const srcFile = join(srcDir, file)
+    if (statSync(srcFile).isDirectory()) {
+      copyDir(srcFile, join(destDir, file))
+    } else if (!SKIP_DEBUG_ARTIFACT.test(file)) {
+      copyFileSync(srcFile, join(destDir, file))
+    }
+  }
+}
+
+/**
+ * Sync every workspace package's built lib/ into the deployed closure so a
+ * "pnpm run build:lib:client" (or host) refresh reaches the packaged runtime
+ * without a full redeploy. Only packages the closure already contains are
+ * touched; debug artifacts stay out to preserve the prune.
+ */
+function syncWorkspaceLibs() {
+  const modulesRoot = resolve(APP_ROOT, 'out', 'runtime', 'host-deploy', 'node_modules')
+  const packagesRoot = resolve(APP_ROOT, '..', '..', 'packages')
+  if (!existsSync(packagesRoot)) return
+  let copied = 0
+  let skipped = 0
+  for (const group of readdirSync(packagesRoot)) {
+    const groupDir = join(packagesRoot, group)
+    if (!statSync(groupDir).isDirectory()) continue
+    for (const name of readdirSync(groupDir)) {
+      const pkgDir = join(groupDir, name)
+      if (!statSync(pkgDir).isDirectory()) continue
+      // Package names do not follow the directory names (client dirs are
+      // ui-* but ship as dsh-client-ui-*), so read the real manifest name.
+      const manifestPath = join(pkgDir, 'package.json')
+      if (!existsSync(manifestPath)) continue
+      const manifestName = JSON.parse(readFileSync(manifestPath, 'utf8')).name
+      if (typeof manifestName !== 'string' || !manifestName.startsWith('@deepseek-ai/')) continue
+      const srcLib = join(pkgDir, 'lib')
+      if (!existsSync(srcLib)) continue
+      const destLib = join(modulesRoot, '@deepseek-ai', manifestName.slice('@deepseek-ai/'.length), 'lib')
+      if (!existsSync(destLib)) continue
+      const walk = (cur) => {
+        for (const file of readdirSync(cur)) {
+          const src = join(cur, file)
+          if (statSync(src).isDirectory()) {
+            mkdirSync(join(destLib, relative(srcLib, src)), { recursive: true })
+            walk(src)
+          } else if (SKIP_DEBUG_ARTIFACT.test(file)) {
+            skipped += 1
+          } else {
+            copyFileSync(src, join(destLib, relative(srcLib, src)))
+            copied += 1
+          }
+        }
+      }
+      walk(srcLib)
+    }
+  }
+  console.log('deploy-runtime: synced workspace libs (' + copied + ' files, ' + skipped + ' debug artifacts skipped)')
+}
+
+syncWorkspaceLibs()
+
+/**
+ * Restore the two OpenCode providers' runtime deps into the closure. The trim
+ * above keeps their catalog entries and lazy API wrappers, whose non-lazy
+ * backends import @anthropic-ai/sdk and @google/genai — both pruned by the
+ * earlier size passes and, being optional pi-ai peers, absent from a plain
+ * workspace install. Copy them (plus any dependency the closure still lacks)
+ * out of the pnpm store into the flat closure.
+ */
+function restoreOpencodeDeps() {
+  const modulesRoot = resolve(APP_ROOT, 'out', 'runtime', 'host-deploy', 'node_modules')
+  const copied = []
+  const visit = (name) => {
+    if (existsSync(join(modulesRoot, name))) return
+    const src = findInStore(name)
+    if (src === undefined) {
+      console.error('deploy-runtime: opencode dep not in pnpm store: ' + name)
+      return
+    }
+    copyDir(src, join(modulesRoot, name))
+    copied.push(name)
+    const manifest = JSON.parse(readFileSync(join(src, 'package.json'), 'utf8'))
+    for (const dep of Object.keys(manifest.dependencies ?? {})) visit(dep)
+  }
+  visit('@anthropic-ai/sdk')
+  visit('@google/genai')
+  if (copied.length > 0) {
+    console.log('deploy-runtime: restored opencode deps (' + copied.join(', ') + ')')
+  }
+}
+
+restoreOpencodeDeps()
+
+trimPiAiProviders()

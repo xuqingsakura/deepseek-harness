@@ -337,3 +337,99 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
 }
+/* Commit graph: lane columns with edge lines and node dots, VSCode-style. */
+.graphRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.graphRow:hover {
+  background: var(--dsw-alias-bg-hover);
+}
+
+.graphCells {
+  display: flex;
+  flex: none;
+  height: 18px;
+}
+
+.graphEmpty {
+  width: 14px;
+  height: 18px;
+  flex: none;
+}
+
+.graphEdge {
+  width: 14px;
+  height: 18px;
+  flex: none;
+  border-left: 2px solid var(--dsw-alias-brand-primary);
+  border-right: 2px solid var(--dsw-alias-brand-primary);
+  opacity: 0.55;
+}
+
+.graphNode {
+  width: 14px;
+  height: 18px;
+  flex: none;
+  position: relative;
+}
+
+.graphNode::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary);
+}
+
+.graphNode::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--dsw-alias-brand-primary);
+  opacity: 0.55;
+}
+
+.graphHash {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.graphMessage {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+
+.graphMergeTag {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-subtle);
+  border: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.graphAuthor {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}

@@ -88,7 +88,7 @@ export type WorkbenchTasksPanelProps = {
  */
 export function WorkbenchTasksPanel({ sessionId, sessions, t }: WorkbenchTasksPanelProps) {
   const jobs = useSyncExternalStore(
-    sessions.subscribe,
+    listener => sessions.subscribe(listener),
     () => sessions.getSnapshot().jobsBySession[sessionId as SessionId] ?? NO_TASKS,
     () => NO_TASKS,
   )

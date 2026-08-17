@@ -7,6 +7,7 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject, NS } from '../src/client/index.ts'
+import { DesktopPluginTab } from '../src/client/DesktopPluginTab.tsx'
 import { PluginInventorySettingsTab } from '../src/client/PluginInventorySettingsTab.tsx'
 import type { PluginInventorySettingsTabInjected } from '../src/client/PluginInventorySettingsTab.tsx'
 
@@ -89,5 +90,33 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
     expect(b.slots.entries('settings.plugins.tab')).toHaveLength(0)
     expect(() => b.locale.register(NS, 'zh', {})).not.toThrow()
     await b.ctx.fiber.dispose()
+  })
+
+  it('adds the desktop plugin manager as a peer tab only when the Electron bridge exists', async () => {
+    const b = await bench()
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    // No bridge in this environment: only the inventory tab registers.
+    expect(b.slots.entries('settings.plugins.tab').map(e => e.options.id)).toEqual(['all'])
+    await b.ctx.fiber.dispose()
+
+    Object.defineProperty(window, 'dshDesktop', {
+      value: { pluginList: vi.fn(async () => []), pluginOutdated: vi.fn(async () => ({})) },
+      configurable: true,
+    })
+    try {
+      const desktop = await bench()
+      declare(desktop.slots)
+      await desktop.ctx.plugin({ inject: [...inject], apply }).await()
+      const tabs = desktop.slots.entries('settings.plugins.tab')
+      expect(tabs.map(e => e.options.id)).toEqual(['all', 'desktop'])
+      const peer = tabs[1]!
+      expect(peer.component).toBe(DesktopPluginTab)
+      expect(peer.options.order).toBe(20)
+      expect(resolveSlotLabel(peer.options.label)).toBe('桌面端插件管理')
+      await desktop.ctx.fiber.dispose()
+    } finally {
+      delete (window as { dshDesktop?: unknown }).dshDesktop
+    }
   })
 })

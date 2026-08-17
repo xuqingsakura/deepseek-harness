@@ -68,7 +68,7 @@ export function parseAnsi(text: string): AnsiSegment[] {
     }
   }
   for (const match of text.matchAll(CSI_RE)) {
-    const start = match.index ?? 0
+    const start = match.index
     pushText(lastIndex, start)
     lastIndex = start + match[0].length
     if (match[2] !== 'm') continue
@@ -78,10 +78,10 @@ export function parseAnsi(text: string): AnsiSegment[] {
       if (param === 0) { fg = undefined; bg = undefined; bold = false; inverse = false }
       else if (param === 1) bold = true
       else if (param === 7) inverse = true
-      else if (param >= 30 && param <= 37) fg = COLORS[param - 30] as string
-      else if (param >= 40 && param <= 47) bg = COLORS[param - 40] as string
-      else if (param >= 90 && param <= 97) fg = BRIGHT[param - 90] as string
-      else if (param >= 100 && param <= 107) bg = BRIGHT[param - 100] as string
+      else if (param >= 30 && param <= 37) fg = COLORS[param - 30]
+      else if (param >= 40 && param <= 47) bg = COLORS[param - 40]
+      else if (param >= 90 && param <= 97) fg = BRIGHT[param - 90]
+      else if (param >= 100 && param <= 107) bg = BRIGHT[param - 100]
     }
   }
   pushText(lastIndex, text.length)

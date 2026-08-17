@@ -186,6 +186,9 @@ export function SidebarRoot({
             <IconPanelLeftOutline16 size={18} />
           </button>
         </Tooltip>
+        {/* Settings rides the rail bottom (VSCode-style gear), always
+            reachable whether the panel is wide or collapsed. */}
+        {renderSlot('sidebar.settings', { wide: false })}
       </div>
 
       {/* The wide panel mounts only while the column is wide. */}
@@ -228,9 +231,6 @@ export function SidebarRoot({
           <div className={css.footArea}>
             <div className={css.footerActions}>
               {renderSlot('sidebar.footer.action', { wide })}
-            </div>
-            <div className={css.settingsArea}>
-              {renderSlot('sidebar.settings', { wide })}
             </div>
           </div>
         </div>

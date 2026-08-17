@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-16-workbench-viewer-grid-row-auto-placement.md
-2026-08-16-workbench-viewer-grid-row-auto-placement.md: 301c90bf9eab53f0bb30e5e70b0ec0ab42410fc8
-2026-08-16-workbench-viewer-grid-row-auto-placement.zh.md: 56f77d3994533b01e10f3f3fbfd777f6e59ff0a6
+2026-08-16-workbench-viewer-grid-row-auto-placement.md: 93a5c31b2b5b1a4d6a18c15d2040edbf3b4447bc
+2026-08-16-workbench-viewer-grid-row-auto-placement.zh.md: 38f9468d9634550359e31f5b4ae9f468b9cf44e6

@@ -1199,6 +1199,23 @@ describe('DirectoryBrowser', () => {
     expect(screen.getByRole('listitem').textContent).toBe('Documents')
   })
 
+  it('localizes a permission fault (Windows EPERM known folder) instead of the raw host message', async () => {
+    const listDirectory = vi.fn(async () => {
+      throw new DirectoryBrowseError({
+        code: 'directory-unreadable',
+        message: 'cannot list C:\\Users\\u\\Start Menu: EPERM: operation not permitted',
+        details: { path: 'C:\\Users\\u\\Start Menu' },
+      })
+    })
+    mount({
+      listDirectory,
+      t: (key, params) => (params === undefined ? key : `${key}:${String(params.path ?? params.name)}`),
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toBe('browser.permissionDenied:C:\\Users\\u\\Start Menu')
+    })
+  })
+
   it('folds non-typed failures into readable text (Error message, String otherwise)', async () => {
     const b = mount({ listDirectory: vi.fn(async () => { throw new Error('socket down') }) })
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('socket down') })

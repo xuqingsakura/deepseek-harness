@@ -33,7 +33,9 @@ import { browsePickerOverlayPath, pickLoopbackPort, startHostInProcess, type InP
 import {
   authorizeBuilds,
   checkOutdated,
+  installBuiltinPlugin,
   installPlugin,
+  listBuiltinPlugins,
   listPlugins,
   removePlugin,
   removePlugins,
@@ -41,6 +43,7 @@ import {
   updateAllPlugins,
   updatePlugin,
 } from './plugin-manager.ts'
+import { migrateWebData, type MigrateOptions } from './migrate-web-data.ts'
 import { fileURLToPath } from 'node:url'
 
 /** apps/desktop — one level up from src/ and lib/ (same relative hop from either artifact). */
@@ -167,7 +170,7 @@ interface HostHandle {
  * @param onLine - optional sink for host stdout lines (logging).
  * @returns the URL promise plus a kill handle.
  */
-async function startHost(port: number, overlayPath: string, onLine?: (line: string) => void): Promise<HostHandle> {
+function startHost(port: number, overlayPath: string, onLine?: (line: string) => void): HostHandle {
   // Packaged runs carry their own Node plus the deployed host closure under
   // resources/runtime; source/dev runs use the checked-out launcher and a real
   // Node from the environment.
@@ -209,7 +212,7 @@ async function startHost(port: number, overlayPath: string, onLine?: (line: stri
   lines.on('line', (line) => {
     onLine?.(line)
     const match = HOST_URL_RE.exec(line)
-    if (match?.[1] !== undefined) settleUrl(() => url.resolve(match[1] as string))
+    if (match?.[1] !== undefined) settleUrl(() =>{  url.resolve(match[1] as string) })
   })
   child.stderr?.on('data', (chunk: Buffer) => {
     const text = String(chunk).trimEnd()
@@ -217,12 +220,12 @@ async function startHost(port: number, overlayPath: string, onLine?: (line: stri
   })
   child.on('error', (error) => {
     debugLog(`host spawn error: ${error.message}`)
-    settleUrl(() => url.reject(error))
+    settleUrl(() =>{  url.reject(error) })
     exited.resolve()
   })
   child.on('exit', (code) => {
     debugLog(`host exited code=${String(code)}`)
-    settleUrl(() => url.reject(new Error(`dsh-host exited before readiness (code ${String(code)})`)))
+    settleUrl(() =>{  url.reject(new Error(`dsh-host exited before readiness (code ${String(code)})`)) })
     exited.resolve()
   })
   return {
@@ -245,7 +248,7 @@ async function waitForRender(window: BrowserWindow, timeoutMs: number): Promise<
   while (Date.now() < deadline) {
     const children: number = await window.webContents.executeJavaScript(
       "Number(document.getElementById('root')?.children.length ?? 0)",
-    )
+    ) as number
     if (children > 0) return children
     await new Promise(resolve => setTimeout(resolve, 500))
   }
@@ -382,14 +385,14 @@ function createTray(window: () => BrowserWindow | undefined): Tray {
   const created = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon)
   created.setToolTip('DeepSeek Harness')
   created.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示 / 隐藏', click: () => toggleWindow(window()) },
+    { label: '显示 / 隐藏', click: () =>{  toggleWindow(window()) } },
     { type: 'separator' },
     { label: '退出 DeepSeek Harness', click: () => {
       quitting = true
       app.quit()
     } },
   ]))
-  created.on('click', () => toggleWindow(window()))
+  created.on('click', () =>{  toggleWindow(window()) })
   return created
 }
 
@@ -410,7 +413,7 @@ function debugLog(message: string): void {
 }
 
 /** Deferred fs import keeps the top of the file dependency-light. */
-function awaitImportFs(): { appendFileSync(path: string, data: string): void } {
+function awaitImportFs(): { appendFileSync: (path: string, data: string) => void } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('node:fs') as { appendFileSync(path: string, data: string): void }
 }
@@ -494,20 +497,20 @@ function wireAutoUpdater(): void {
     setUpdateState({ status: 'checking' })
   })
   autoUpdater.on('update-available', (info) => {
-    setUpdateState({ status: 'available', availableVersion: String(info.version) })
-    notify('发现新版本', `v${String(info.version)} 正在后台下载，完成后会提示重启安装。`)
+    setUpdateState({ status: 'available', availableVersion: info.version })
+    notify('发现新版本', `v${info.version} 正在后台下载，完成后会提示重启安装。`)
   })
   autoUpdater.on('update-not-available', (info) => {
-    setUpdateState({ status: 'not-available', availableVersion: String(info.version) })
-    if (manualUpdateCheck) notify('检查更新', `已是最新版本（v${String(info.version)}）。`)
+    setUpdateState({ status: 'not-available', availableVersion: info.version })
+    if (manualUpdateCheck) notify('检查更新', `已是最新版本（v${info.version}）。`)
   })
   autoUpdater.on('download-progress', (progress) => {
     setUpdateState({ status: 'downloading', progress: Math.round(progress.percent) })
   })
   autoUpdater.on('update-downloaded', (info) => {
-    setUpdateState({ status: 'downloaded', availableVersion: String(info.version) })
-    const notice = new Notification({ title: 'DeepSeek Harness', body: `新版本 v${String(info.version)} 已下载，点击重启并安装。` })
-    notice.on('click', () => autoUpdater.quitAndInstall())
+    setUpdateState({ status: 'downloaded', availableVersion: info.version })
+    const notice = new Notification({ title: 'DeepSeek Harness', body: `新版本 v${info.version} 已下载，点击重启并安装。` })
+    notice.on('click', () =>{  autoUpdater.quitAndInstall() })
     notice.show()
   })
   autoUpdater.on('error', (error) => {
@@ -786,6 +789,21 @@ if (GEN_ICON_DIR !== undefined) {
       throw new Error(pluginErrorMessage('检查插件更新', error))
     }
   })
+  ipcMain.handle('dsh:plugin-builtin-list', () => {
+    try {
+      return listBuiltinPlugins()
+    } catch (error) {
+      throw new Error(pluginErrorMessage('读取内置插件', error))
+    }
+  })
+  ipcMain.handle('dsh:plugin-builtin-install', async (_event, name: unknown) => {
+    if (typeof name !== 'string' || name.trim() === '') throw new Error('dsh-plugin: 内置插件名不能为空')
+    try {
+      return await installBuiltinPlugin(harnessHome(), name.trim())
+    } catch (error) {
+      throw new Error(pluginErrorMessage('安装内置插件', error))
+    }
+  })
   ipcMain.handle('dsh:update-status', () => updateState)
   ipcMain.handle('dsh:update-check', () => {
     checkForUpdates(true)
@@ -794,6 +812,26 @@ if (GEN_ICON_DIR !== undefined) {
   ipcMain.handle('dsh:update-install', () => {
     if (updateState.status === 'downloaded') autoUpdater.quitAndInstall()
     return true
+  })
+
+  // Web→desktop data migration: the renderer asks the main process to import
+  // Web-harness data (~/.dsh) into the desktop home. The target is always the
+  // desktop home; the source defaults to the Web home unless the renderer
+  // names one. The migration itself never overwrites target-owned data.
+  ipcMain.handle('dsh:migrate-web-data', async (_event, options: unknown) => {
+    const parsed = (typeof options === 'object' && options !== null ? options : {}) as Partial<MigrateOptions>
+    try {
+      return await migrateWebData({
+        target: harnessHome(),
+        ...(typeof parsed.source === 'string' ? { source: parsed.source } : {}),
+        ...(parsed.dryRun === true ? { dryRun: true } : {}),
+        ...(parsed.includeSettings === true ? { includeSettings: true } : {}),
+        ...(parsed.includeCredentials === true ? { includeCredentials: true } : {}),
+        ...(parsed.force === true ? { force: true } : {}),
+      })
+    } catch (error) {
+      throw new Error('迁移 Web 数据失败。\n' + (error instanceof Error ? error.message : String(error)))
+    }
   })
 
   ipcMain.handle('dsh:api-fetch', async (_event, request: unknown) => {
@@ -855,7 +893,7 @@ if (GEN_ICON_DIR !== undefined) {
       if (apiSockets.get(key)?.socket === socket) apiSockets.delete(key)
       if (!event.sender.isDestroyed()) event.sender.send('dsh:api-stream-end', channel)
     })
-    socket.addEventListener('error', () => socket.close())
+    socket.addEventListener('error', () =>{  socket.close() })
   })
 
   ipcMain.on('dsh:api-stream-unsubscribe', (event, channel: unknown) => {
@@ -878,7 +916,7 @@ if (GEN_ICON_DIR !== undefined) {
    */
   function notifyForAttention(envelope: unknown): void {
     const frame = (envelope as { payload?: { type?: string; toolName?: string; sessionId?: unknown } } | null)?.payload
-    if (frame === undefined || frame === null) return
+    if (frame === undefined) return
     if (frame.type !== 'approval/requested' && frame.type !== 'question/requested') return
     const [window] = BrowserWindow.getAllWindows()
     if (window !== undefined && window.isVisible() && !window.isMinimized()) return
@@ -937,7 +975,7 @@ if (GEN_ICON_DIR !== undefined) {
       const desktopPort = await pickLoopbackPort()
       const overlayPath = browsePickerOverlayPath()
       if (process.env.DSH_DESKTOP_HOST?.trim() === 'child') {
-        host = await startHost(desktopPort, overlayPath, line => console.log(`[dsh-host] ${line}`))
+        host = startHost(desktopPort, overlayPath, (line) =>{  console.log(`[dsh-host] ${line}`) })
       } else {
         const runtimeRoot = app.isPackaged
           ? join(process.resourcesPath, 'runtime', 'host-deploy')
@@ -983,12 +1021,12 @@ if (GEN_ICON_DIR !== undefined) {
           // silent (real updates notify, "no update" never does).
           wireAutoUpdater()
           configureUpdater()
-          setTimeout(() => checkForUpdates(false), 12_000)
+          setTimeout(() =>{  checkForUpdates(false) }, 12_000)
         }
         if (SMOKE) {
           const children = await waitForRender(window, SMOKE_TIMEOUT_MS)
           if (children > 0) {
-            const title: string = await window.webContents.executeJavaScript('document.title')
+            const title: string = await window.webContents.executeJavaScript('document.title') as string
             const chrome = await window.webContents.executeJavaScript(`(() => {
               const bar = document.getElementById('dsh-titlebar')
               const title = document.getElementById('dsh-titlebar-title')
@@ -1008,7 +1046,7 @@ if (GEN_ICON_DIR !== undefined) {
                 titlebarBg: bar !== null ? getComputedStyle(bar).backgroundColor : null,
                 bodyBg: getComputedStyle(document.body).backgroundColor,
               }
-            })()`)
+            })()`) as unknown
             console.log(`DESKTOP_TITLEBAR ${JSON.stringify(chrome)}`)
             // Simulate the theme presenter applying the dark palette (root
             // color-scheme + body attribute + label-primary token) and assert
@@ -1025,7 +1063,7 @@ if (GEN_ICON_DIR !== undefined) {
                 titlebarColor: bar === null ? null : getComputedStyle(bar).color,
                 titlebarBg: bar === null ? null : getComputedStyle(bar).backgroundColor,
               }
-            })()`)
+            })()`) as unknown
             console.log(`DESKTOP_TITLEBAR_DARK ${JSON.stringify(darkChrome)}`)
 
             // Plugin-skin smoke assertion: the composed client boot manifest and
@@ -1044,7 +1082,7 @@ if (GEN_ICON_DIR !== undefined) {
                 fetchStatus,
                 bgToken: getComputedStyle(document.body).getPropertyValue('--dsw-alias-bg-base').trim(),
               }
-            })()`)
+            })()`) as unknown
             console.log(`DESKTOP_SKIN ${JSON.stringify(skinChrome)}`)
             await window.webContents.executeJavaScript("document.getElementById('dsh-btn-min')?.click()")
             await new Promise(resolve => setTimeout(resolve, 400))
@@ -1069,26 +1107,26 @@ if (GEN_ICON_DIR !== undefined) {
                 body: JSON.stringify({ type: 'client-request', rpcId: 'smoke-ipc', method: 'host.describe', payload: {} }),
               })
               return { bridge: true, status: response.status }
-            })()`)
+            })()`) as unknown
             console.log(`DESKTOP_IPC_TEST ${JSON.stringify(ipcTest)}`)
-            console.log(`DESKTOP_PICKER_TEST picker=${host?.picker ?? 'n/a'}`)
+            console.log(`DESKTOP_PICKER_TEST picker=${host.picker ?? 'n/a'}`)
             await window.webContents.executeJavaScript("window.dshDesktop?.notify({ title: 'dsh-desktop', body: 'notification bridge ok' })")
             console.log('DESKTOP_NOTIFY sent=true')
             const screenshotPath = app.isPackaged ? join(app.getPath('userData'), 'smoke.png') : join(APP_ROOT, '.smoke.png')
             const image = await window.webContents.capturePage()
             await writeFile(screenshotPath, image.toPNG())
             console.log(`DESKTOP_SMOKE_OK title=${title} rootChildren=${String(children)} screenshot=${screenshotPath}`)
-            host?.kill()
+            host.kill()
             app.exit(0)
           } else {
             console.error('DESKTOP_SMOKE_FAIL root did not render')
-            host?.kill()
+            host.kill()
             app.exit(1)
           }
         }
       } catch (error) {
         console.error('[dsh-desktop] host failed to start:', error)
-        host?.kill()
+        host.kill()
         app.exit(1)
       }
     })

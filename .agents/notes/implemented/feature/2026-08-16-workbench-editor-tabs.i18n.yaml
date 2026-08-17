@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-16-workbench-editor-tabs.md
-2026-08-16-workbench-editor-tabs.md: 1d71491815ee4dcd0501f29ce3b991eddaf885f0
-2026-08-16-workbench-editor-tabs.zh.md: d4a60e7fff4a80dc5c575da7c9edd43b1a4a0639
+2026-08-16-workbench-editor-tabs.md: 702b1b50865ab01187c1bf4b370eb66e74eca305
+2026-08-16-workbench-editor-tabs.zh.md: c1f6d73262c14f52912382abb6741250d85a43f1

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-16-workbench-terminal-git-editor.md
-2026-08-16-workbench-terminal-git-editor.md: 4970891cf8329cc84f2ac88df4a5d29e5908419e
+2026-08-16-workbench-terminal-git-editor.md: fe0c44b80bc41b7582241b7d545a2b970d4eee9c
 2026-08-16-workbench-terminal-git-editor.zh.md: f70f5d9f15b8062c7144e90a4b942f7171822ff8

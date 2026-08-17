@@ -45,6 +45,7 @@ export function apply(ctx: ClientContext): void {
         'browser.editPath': '编辑路径',
         'browser.loading': '加载中…',
         'browser.truncated': '文件夹过多，仅显示开头部分。',
+        'browser.permissionDenied': '无法读取该文件夹（可能是系统或受保护文件夹），请选择其他文件夹：{path}',
         'browser.showHidden': '显示隐藏文件',
       }],
       ['en', {
@@ -60,6 +61,7 @@ export function apply(ctx: ClientContext): void {
         'browser.editPath': 'Edit path',
         'browser.loading': 'Loading…',
         'browser.truncated': 'Too many folders to list; only the beginning is shown.',
+        'browser.permissionDenied': 'Cannot read this folder (it may be a system or protected folder). Choose another folder: {path}',
         'browser.showHidden': 'Show hidden files',
       }],
     ]

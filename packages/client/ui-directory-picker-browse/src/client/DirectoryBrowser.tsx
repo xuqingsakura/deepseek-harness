@@ -63,9 +63,19 @@ export interface DirectoryBrowserProps {
   t: Translate
 }
 
-/** Failure text: the Host business message when typed, else the throw's text. */
-function failureText(error: unknown): string {
-  if (error instanceof DirectoryBrowseError) return error.rpcError.message
+/** True when the Host's unreadable-directory message names a permission fault (Windows EPERM on protected known folders, POSIX EACCES). */
+function isPermissionMessage(message: string): boolean {
+  return /EPERM|EACCES|permission denied|operation not permitted|access is denied/i.test(message)
+}
+
+/** Failure text: a localized permission hint when the Host reports one, else the Host business message or the throw's text. */
+function failureText(error: unknown, t: Translate): string {
+  if (error instanceof DirectoryBrowseError) {
+    if (error.rpcError.code === 'directory-unreadable' && isPermissionMessage(error.rpcError.message)) {
+      return t('browser.permissionDenied', { path: error.rpcError.details.path })
+    }
+    return error.rpcError.message
+  }
   return error instanceof Error ? error.message : String(error)
 }
 
@@ -465,7 +475,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
     }, (reason: unknown) => {
       if (seq !== requestSeq.current) return
       setLoading(false)
-      if (options.announce) setError(failureText(reason))
+      if (options.announce) setError(failureText(reason, t))
     })
   }, [launchListing, continueScan])
 
@@ -511,7 +521,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
     }, (reason: unknown) => {
       if (seq !== requestSeq.current) return
       setLoading(false)
-      setError(failureText(reason))
+      setError(failureText(reason, t))
       // An unreadable selection cannot be the committing target while the
       // breadcrumb still names the level: fall back to the single pane.
       setSelected(null)
@@ -629,12 +639,12 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
         /* v8 ignore next -- same fence as navigate/select; the modal blocks superseding input */
         if (seq !== requestSeq.current) return
         setLoading(false)
-        setError(failureText(reason))
+        setError(failureText(reason, t))
       })
     }, (reason: unknown) => {
       if (generation !== openGeneration.current) return
       setCreatingFolder(false)
-      setCreateError(failureText(reason))
+      setCreateError(failureText(reason, t))
     })
   }
 

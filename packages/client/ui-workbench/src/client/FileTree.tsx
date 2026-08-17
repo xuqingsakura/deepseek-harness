@@ -11,15 +11,15 @@ import css from './FileTree.module.css'
 /** The injected verbs the tree panel hands down (listing + filesystem ops). */
 export interface FileTreeInjected {
   /** List one directory level; an empty path is the session cwd itself. */
-  listDir(sessionId: string, path: string): Promise<WorkbenchDirEntry[]>
+  listDir: (sessionId: string, path: string) => Promise<WorkbenchDirEntry[]>
   /** Create one directory (and parents). */
-  fsMkdir(sessionId: string, path: string): Promise<void>
+  fsMkdir: (sessionId: string, path: string) => Promise<void>
   /** Rename or move one file or directory. */
-  fsRename(sessionId: string, path: string, nextPath: string): Promise<void>
+  fsRename: (sessionId: string, path: string, nextPath: string) => Promise<void>
   /** Delete one file or (recursively) directory. */
-  fsRemove(sessionId: string, path: string, recursive?: boolean): Promise<void>
+  fsRemove: (sessionId: string, path: string, recursive?: boolean) => Promise<void>
   /** Write a new file's content (version omitted = create-or-overwrite). */
-  writeText(sessionId: string, path: string, content: string, version?: WorkbenchWriteResult['version']): Promise<WorkbenchWriteResult>
+  writeText: (sessionId: string, path: string, content: string, version?: WorkbenchWriteResult['version']) => Promise<WorkbenchWriteResult>
 }
 
 /** Full props for the file tree. */
@@ -29,7 +29,7 @@ export type FileTreeProps = FileTreeInjected & {
   /** The session cwd ('' resolves to it). */
   cwd: string
   /** Open a file for viewing. */
-  onOpen(path: string): void
+  onOpen: (path: string) => void
   /** The active file path, highlighted when it matches a row. */
   activePath?: string | undefined
   /** Locale-bound copy. */
@@ -180,6 +180,9 @@ export function FileTree({
 
   const root = childrenByPath['']
 
+  // The root listing failed (a protected/system folder the host cannot
+  // open, e.g. Windows legacy user folders): show the error instead of
+  // an eternal loading hint. Subtree failures render inline per row.
   return (
     <div className={css.tree} role="tree" aria-label={t('tree.aria')}
       onContextMenu={(event) => {
@@ -190,7 +193,9 @@ export function FileTree({
       }}
     >
       {root === undefined ? (
-        <div className={css.hint}>{t('tree.loading')}</div>
+        errorPath === undefined
+          ? <div className={css.hint}>{t('tree.loading')}</div>
+          : <div className={css.hint}>{t('tree.error')}</div>
       ) : root.length === 0 ? (
         <div className={css.hint}>{t('tree.empty')}</div>
       ) : (
@@ -205,7 +210,7 @@ export function FileTree({
               expanded={expanded}
               loadingPath={loadingPath}
               errorPath={errorPath}
-              onToggle={toggle}
+              onToggle={path => void toggle(path)}
               onOpen={onOpen}
               onContextMenu={(event, path, name, kind) => {
                 event.preventDefault()
@@ -222,18 +227,18 @@ export function FileTree({
       {menu !== undefined ? (
         <div ref={menuRef} className={css.menu} style={{ left: menu.x, top: menu.y }} role="menu" aria-label={t('tree.menuAria')}>
           {menuError !== undefined ? <div className={css.menuError}>{menuError}</div> : null}
-          <button type="button" role="menuitem" className={css.menuItem} onClick={() => newFile(parentOf(menu.path))}>
+          <button type="button" role="menuitem" className={css.menuItem} onClick={() =>{  newFile(parentOf(menu.path)) }}>
             {t('tree.newFile')}
           </button>
-          <button type="button" role="menuitem" className={css.menuItem} onClick={() => newFolder(parentOf(menu.path))}>
+          <button type="button" role="menuitem" className={css.menuItem} onClick={() =>{  newFolder(parentOf(menu.path)) }}>
             {t('tree.newFolder')}
           </button>
           {menu.path !== '' ? (
             <>
-              <button type="button" role="menuitem" className={css.menuItem} onClick={() => rename(menu)}>
+              <button type="button" role="menuitem" className={css.menuItem} onClick={() =>{  rename(menu) }}>
                 {t('tree.rename')}
               </button>
-              <button type="button" role="menuitem" className={css.menuItemDanger} onClick={() => remove(menu)}>
+              <button type="button" role="menuitem" className={css.menuItemDanger} onClick={() =>{  remove(menu) }}>
                 {t('tree.delete')}
               </button>
             </>
@@ -252,9 +257,9 @@ interface TreeRowProps {
   expanded: ReadonlySet<string>
   loadingPath: string | undefined
   errorPath: string | undefined
-  onToggle(path: string): void
-  onOpen(path: string): void
-  onContextMenu(event: React.MouseEvent, path: string, name: string, kind: 'file' | 'directory'): void
+  onToggle: (path: string) => void
+  onOpen: (path: string) => void
+  onContextMenu: (event: React.MouseEvent, path: string, name: string, kind: 'file' | 'directory') => void
   activePath?: string | undefined
   t: TranslateNS<typeof NS>
 }
@@ -276,8 +281,8 @@ function TreeRow({
         type="button"
         className={isActive ? css.rowActive : css.row}
         style={{ paddingLeft: `${8 + depth * 14}px` }}
-        onClick={() => (isDir ? onToggle(path) : onOpen(path))}
-        onContextMenu={event => onContextMenu(event, path, entry.name, isDir ? 'directory' : 'file')}
+        onClick={() => { if (isDir) onToggle(path); else onOpen(path) }}
+        onContextMenu={(event) =>{  onContextMenu(event, path, entry.name, isDir ? 'directory' : 'file') }}
         title={path}
       >
         <span className={isDir ? css.chevron : css.chevronSpacer} aria-hidden="true">

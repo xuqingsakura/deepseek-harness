@@ -9,16 +9,17 @@ import type { WorkbenchStateHandle } from './workbench-store.ts'
 import { DiffViewer, type DiffViewerInjected } from './DiffViewer.tsx'
 import { FileViewer } from './FileViewer.tsx'
 import { WorkbenchTabs } from './WorkbenchTabs.tsx'
+import { WorkbenchBrowserPanel } from './WorkbenchBrowserPanel.tsx'
 import css from './WorkbenchViewer.module.css'
 
 /** The injected read/write verbs and session feed the viewer panel hands down. */
 export interface WorkbenchViewerInjected {
   /** Read one text file through the workbench window. */
-  readText(sessionId: string, path: string): Promise<WorkbenchReadResult>
+  readText: (sessionId: string, path: string) => Promise<WorkbenchReadResult>
   /** Write one text file atomically; a stale version token fails loud. */
-  writeText(sessionId: string, path: string, content: string, version: WorkbenchWriteResult['version']): Promise<WorkbenchWriteResult>
+  writeText: (sessionId: string, path: string, content: string, version: WorkbenchWriteResult['version']) => Promise<WorkbenchWriteResult>
   /** Unified diff of one path (index or worktree per staged). */
-  gitDiff(sessionId: string, path: string, staged: boolean): Promise<WorkbenchGitDiffResult>
+  gitDiff: (sessionId: string, path: string, staged: boolean) => Promise<WorkbenchGitDiffResult>
   /** The session list feed; its current selection is the viewer's fallback binding. */
   sessions: ObservableSnapshot<SessionListState>
 }
@@ -43,7 +44,7 @@ export function WorkbenchViewerPanel({ workbench, readText, writeText, gitDiff, 
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot)
   // Subscribe to the current id only (a primitive): list snapshots may be
   // freshly allocated per read, and a stable current must not re-render.
-  const currentSessionId = useSyncExternalStore(sessions.subscribe, () => sessions.getSnapshot().current)
+  const currentSessionId = useSyncExternalStore(listener => sessions.subscribe(listener), () => sessions.getSnapshot().current)
   const viewerSessionId = state.sessionId ?? currentSessionId
   // Paths with unsaved edits, reported by the FileViewer instances; guards tab
   // switches and closes with a confirm instead of silently dropping work.
@@ -95,6 +96,16 @@ export function WorkbenchViewerPanel({ workbench, readText, writeText, gitDiff, 
     setDirtyPaths(new Set())
     workbench.closeAll()
   }, [state.openPaths, confirmIfDirty, workbench])
+
+  if (state.tab === 'browser') {
+    return (
+      <WorkbenchBrowserPanel
+        url={state.browserUrl}
+        onNavigate={(url) =>{  workbench.navigateBrowser(url) }}
+        t={t}
+      />
+    )
+  }
 
   return (
     <div className={css.viewer}>

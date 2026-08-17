@@ -17,15 +17,15 @@ import css from './WorkbenchTerminalPanel.module.css'
 /** The injected terminal verbs the panel hands down. */
 export interface WorkbenchTerminalPanelInjected {
   /** Spawn one persistent shell for the session scope (optional initial cwd). */
-  terminalSpawn(sessionId: string, cwd?: string): Promise<WorkbenchTerminalSpawnResult>
+  terminalSpawn: (sessionId: string, cwd?: string) => Promise<WorkbenchTerminalSpawnResult>
   /** Write raw input to one terminal's stdin. */
-  terminalWrite(sessionId: string, id: string, data: string): Promise<void>
+  terminalWrite: (sessionId: string, id: string, data: string) => Promise<void>
   /** Consume incremental output from one terminal. */
-  terminalRead(sessionId: string, id: string): Promise<WorkbenchTerminalReadResult>
+  terminalRead: (sessionId: string, id: string) => Promise<WorkbenchTerminalReadResult>
   /** Terminate one terminal. */
-  terminalClose(sessionId: string, id: string): Promise<void>
+  terminalClose: (sessionId: string, id: string) => Promise<void>
   /** Terminate every terminal of the session scope (session switch). */
-  terminalCloseSession(sessionId: string): Promise<void>
+  terminalCloseSession: (sessionId: string) => Promise<void>
 }
 
 /** Full props for the terminal panel. */
@@ -33,7 +33,7 @@ export type WorkbenchTerminalPanelProps = WorkbenchTerminalPanelInjected & {
   /** The conversation whose cwd the shell starts in. */
   sessionId: string
   /** Close the whole bottom terminal panel (VSCode x button). */
-  onClose?(): void
+  onClose?: () => void
   /** Locale-bound copy. */
   t: TranslateNS<typeof NS>
 }
@@ -151,7 +151,7 @@ export function WorkbenchTerminalPanel({
             key={view.id}
             type="button"
             className={view.id === activeId ? css.tabActive : css.tab}
-            onClick={() => setActiveId(view.id)}
+            onClick={() =>{  setActiveId(view.id) }}
           >
             <span className={view.running ? css.dotRunning : css.dotExited} aria-hidden="true" />
             <span className={css.tabLabel}>{view.shell.split(/[\\/]/).pop()}</span>
@@ -184,7 +184,7 @@ export function WorkbenchTerminalPanel({
           output={active.output}
           running={active.running}
           terminalWrite={terminalWrite}
-          onClear={() => clearOutput(active.id)}
+          onClear={() =>{  clearOutput(active.id) }}
           t={t}
         />
       ) : (
@@ -202,8 +202,8 @@ function TerminalBody({
   terminalId: string
   output: string
   running: boolean
-  terminalWrite(sessionId: string, id: string, data: string): Promise<void>
-  onClear(): void
+  terminalWrite: (sessionId: string, id: string, data: string) => Promise<void>
+  onClear: () => void
   t: TranslateNS<typeof NS>
 }) {
   const [value, setValue] = useState('')
@@ -292,7 +292,7 @@ function TerminalBody({
         <input
           className={css.input}
           value={value}
-          onChange={event => setValue(event.target.value)}
+          onChange={(event) =>{  setValue(event.target.value) }}
           onKeyDown={onKeyDown}
           placeholder={t('terminal.placeholder')}
           spellCheck={false}

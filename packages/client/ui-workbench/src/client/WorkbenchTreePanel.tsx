@@ -22,9 +22,9 @@ import css from './WorkbenchTreePanel.module.css'
 export interface WorkbenchTreePanelInjected
   extends WorkbenchGitPanelInjected, WorkbenchTerminalPanelInjected, WorkbenchFileOpsInjected {
   /** Resolve the session's authoritative cwd. */
-  cwd(sessionId: string): Promise<string>
+  cwd: (sessionId: string) => Promise<string>
   /** List one directory level; an empty path is the session cwd itself. */
-  listDir(sessionId: string, path: string): Promise<WorkbenchDirEntry[]>
+  listDir: (sessionId: string, path: string) => Promise<WorkbenchDirEntry[]>
   /** The session list feed; its current selection is the fallback binding. */
   sessions: ObservableSnapshot<SessionListState>
 }
@@ -32,13 +32,13 @@ export interface WorkbenchTreePanelInjected
 /** Filesystem mutation verbs shared by the tree and editor seats. */
 export interface WorkbenchFileOpsInjected {
   /** Create one directory (and parents). */
-  fsMkdir(sessionId: string, path: string): Promise<void>
+  fsMkdir: (sessionId: string, path: string) => Promise<void>
   /** Rename or move one file or directory. */
-  fsRename(sessionId: string, path: string, nextPath: string): Promise<void>
+  fsRename: (sessionId: string, path: string, nextPath: string) => Promise<void>
   /** Delete one file or (recursively) directory. */
-  fsRemove(sessionId: string, path: string, recursive?: boolean): Promise<void>
+  fsRemove: (sessionId: string, path: string, recursive?: boolean) => Promise<void>
   /** Write a file (version omitted = create-or-overwrite). */
-  writeText(sessionId: string, path: string, content: string, version?: WorkbenchWriteResult['version']): Promise<WorkbenchWriteResult>
+  writeText: (sessionId: string, path: string, content: string, version?: WorkbenchWriteResult['version']) => Promise<WorkbenchWriteResult>
 }
 
 /** Full props for the workbench sidebar panel. */
@@ -48,11 +48,12 @@ export type WorkbenchTreePanelProps =
   & WorkbenchTreePanelInjected
   & { workbench: WorkbenchStateHandle; layout: ILayout }
 
-/** The four sidebar tabs in display order. */
-const TABS: readonly { id: WorkbenchSidebarTab; labelKey: 'tab.files' | 'tab.git' | 'tab.tasks' }[] = [
+/** The sidebar tabs in display order. */
+const TABS: readonly { id: WorkbenchSidebarTab; labelKey: 'tab.files' | 'tab.git' | 'tab.tasks' | 'tab.browser' }[] = [
   { id: 'files', labelKey: 'tab.files' },
   { id: 'git', labelKey: 'tab.git' },
   { id: 'tasks', labelKey: 'tab.tasks' },
+  { id: 'browser', labelKey: 'tab.browser' },
 ]
 
 /**
@@ -67,7 +68,7 @@ export function WorkbenchTreePanel({
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot)
   // Subscribe to the current id only (a primitive): list snapshots may be
   // freshly allocated per read, and a stable current must not re-render.
-  const currentSessionId = useSyncExternalStore(sessions.subscribe, () => sessions.getSnapshot().current)
+  const currentSessionId = useSyncExternalStore(listener => sessions.subscribe(listener), () => sessions.getSnapshot().current)
   const [resolvedCwd, setResolvedCwd] = useState<string | undefined>(undefined)
   // Keep the latest listing verb without retriggering on inline prop identity.
   const cwdRef = useRef(cwd)
@@ -90,8 +91,8 @@ export function WorkbenchTreePanel({
 
   if (sessionId === undefined) return null
 
-  const openFile = (path: string): void => workbench.open(path)
-  const setTab = (tab: WorkbenchSidebarTab): void => workbench.set({ tab })
+  const openFile = (path: string): void =>{  workbench.open(path) }
+  const setTab = (tab: WorkbenchSidebarTab): void =>{  workbench.set({ tab }) }
 
   return (
     <aside className={css.panel} aria-label={t('panel.title')}>
@@ -103,7 +104,7 @@ export function WorkbenchTreePanel({
             role="tab"
             aria-selected={state.tab === tab.id}
             className={state.tab === tab.id ? css.tabActive : css.tab}
-            onClick={() => setTab(tab.id)}
+            onClick={() =>{  setTab(tab.id) }}
           >
             {t(tab.labelKey)}
           </button>
@@ -113,7 +114,7 @@ export function WorkbenchTreePanel({
           className={css.terminalToggle}
           aria-label={t('tab.terminal')}
           title={t('tab.terminal')}
-          onClick={() => layout.toggleBottom()}
+          onClick={() =>{  layout.toggleBottom() }}
         >
           &gt;_
         </button>
@@ -138,7 +139,7 @@ export function WorkbenchTreePanel({
           )
         ) : null}
         {state.tab === 'git' ? (
-          <WorkbenchGitPanel sessionId={sessionId} onOpenDiff={(path, staged) => workbench.openDiff(path, staged)} t={t} {...verbs} />
+          <WorkbenchGitPanel sessionId={sessionId} onOpenDiff={(path, staged) =>{  workbench.openDiff(path, staged) }} t={t} {...verbs} />
         ) : null}
         {state.tab === 'tasks' ? (
           <WorkbenchTasksPanel sessionId={sessionId} sessions={sessions} t={t} />

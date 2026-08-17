@@ -300,6 +300,10 @@ describe('git', () => {
     const log = await gateway.gitLog('session-1', 10)
     expect(log.length).toBe(2)
     expect(log[0]?.message).toBe('second')
+    // The newest commit carries its parent hash for the graph layout.
+    expect(log[0]?.parents).toHaveLength(1)
+    expect(log[1]?.hash).toBe(log[0]?.parents[0])
+    expect(log[1]?.parents).toEqual([])
 
     const branches = await gateway.gitBranches('session-1')
     expect(branches.some(branch => branch.current)).toBe(true)

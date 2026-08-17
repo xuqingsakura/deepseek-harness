@@ -54,19 +54,37 @@ async function bench() {
     (sessionId: string, path: string, content: string, version: string) =>
     Promise<RemoteResult<{ version: string }>>
   >().mockResolvedValue({ ok: true, value: { version: 'v2' } })
-  const terminalSpawn = vi.fn().mockResolvedValue({ ok: true, value: { session: { id: 't0', status: 'running', exitCode: null }, shell: 'powershell.exe' } })
-  const terminalWrite = vi.fn().mockResolvedValue({ ok: true, value: undefined })
-  const terminalRead = vi.fn().mockResolvedValue({ ok: true, value: { delta: '', session: { id: 't0', status: 'running', exitCode: null } } })
-  const terminalClose = vi.fn().mockResolvedValue({ ok: true, value: undefined })
-  const terminalCloseSession = vi.fn().mockResolvedValue({ ok: true, value: undefined })
-  const gitStatus = vi.fn().mockResolvedValue({ ok: true, value: { isRepo: false, branch: '', changes: [] } })
-  const gitDiff = vi.fn().mockResolvedValue({ ok: true, value: { diff: '', binary: false } })
-  const gitLog = vi.fn().mockResolvedValue({ ok: true, value: [] })
-  const gitBranches = vi.fn().mockResolvedValue({ ok: true, value: [] })
-  const gitAdd = vi.fn().mockResolvedValue({ ok: true, value: undefined })
-  const gitRestore = vi.fn().mockResolvedValue({ ok: true, value: undefined })
-  const gitCommit = vi.fn().mockResolvedValue({ ok: true, value: undefined })
-  const gitCheckout = vi.fn().mockResolvedValue({ ok: true, value: undefined })
+  type TermSession = { id: string; status: string; exitCode: number | null }
+  type TermSpawnValue = { session: TermSession; shell: string }
+  type TermReadValue = { delta: string; session: TermSession }
+  type GitStatusValue = { isRepo: boolean; branch: string; changes: { path: string; staged: boolean; kind: string }[] }
+  type GitLogEntry = { hash: string; shortHash: string; author: string; date: string; message: string; parents: string[] }
+  const terminalSpawn = vi.fn<(sessionId: string) => Promise<RemoteResult<TermSpawnValue>>>()
+    .mockResolvedValue({ ok: true, value: { session: { id: 't0', status: 'running', exitCode: null }, shell: 'powershell.exe' } })
+  const terminalWrite = vi.fn<(sessionId: string, id: string, data: string) => Promise<RemoteResult<undefined>>>()
+    .mockResolvedValue({ ok: true, value: undefined })
+  const terminalRead = vi.fn<(sessionId: string, id: string) => Promise<RemoteResult<TermReadValue>>>()
+    .mockResolvedValue({ ok: true, value: { delta: '', session: { id: 't0', status: 'running', exitCode: null } } })
+  const terminalClose = vi.fn<(sessionId: string, id: string) => Promise<RemoteResult<undefined>>>()
+    .mockResolvedValue({ ok: true, value: undefined })
+  const terminalCloseSession = vi.fn<(sessionId: string) => Promise<RemoteResult<undefined>>>()
+    .mockResolvedValue({ ok: true, value: undefined })
+  const gitStatus = vi.fn<(sessionId: string) => Promise<RemoteResult<GitStatusValue>>>()
+    .mockResolvedValue({ ok: true, value: { isRepo: false, branch: '', changes: [] } })
+  const gitDiff = vi.fn<(sessionId: string, path?: string, staged?: boolean) => Promise<RemoteResult<{ diff: string; binary: boolean }>>>()
+    .mockResolvedValue({ ok: true, value: { diff: '', binary: false } })
+  const gitLog = vi.fn<(sessionId: string, limit?: number) => Promise<RemoteResult<GitLogEntry[]>>>()
+    .mockResolvedValue({ ok: true, value: [] })
+  const gitBranches = vi.fn<(sessionId: string) => Promise<RemoteResult<{ name: string; current: boolean }[]>>>()
+    .mockResolvedValue({ ok: true, value: [] })
+  const gitAdd = vi.fn<(sessionId: string, paths?: string[]) => Promise<RemoteResult<undefined>>>()
+    .mockResolvedValue({ ok: true, value: undefined })
+  const gitRestore = vi.fn<(sessionId: string, paths: string[], staged?: boolean) => Promise<RemoteResult<undefined>>>()
+    .mockResolvedValue({ ok: true, value: undefined })
+  const gitCommit = vi.fn<(sessionId: string, message: string) => Promise<RemoteResult<undefined>>>()
+    .mockResolvedValue({ ok: true, value: undefined })
+  const gitCheckout = vi.fn<(sessionId: string, branch: string) => Promise<RemoteResult<undefined>>>()
+    .mockResolvedValue({ ok: true, value: undefined })
   ctx.provide('remote.workbench', {
     cwd, listDir, readText, writeText,
     terminalSpawn, terminalWrite, terminalRead, terminalClose, terminalCloseSession,
@@ -301,10 +319,10 @@ describe('ui-workbench browser plugin', () => {
       useWorkspaces={(() => undefined) as never}
     />)
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
-    expect(workbench.getSnapshot()).toEqual({ open: true, sessionId: 's1', openPaths: [], activePath: undefined, tab: 'files' })
+    expect(workbench.getSnapshot()).toEqual({ open: true, sessionId: 's1', openPaths: [], activePath: undefined, tab: 'files', browserUrl: 'https://www.deepseek.com' })
     expect(b.openWorkbench).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
-    expect(workbench.getSnapshot()).toEqual({ open: false, sessionId: 's1', openPaths: [], activePath: undefined, tab: 'files' })
+    expect(workbench.getSnapshot()).toEqual({ open: false, sessionId: 's1', openPaths: [], activePath: undefined, tab: 'files', browserUrl: 'https://www.deepseek.com' })
     expect(b.closeWorkbench).toHaveBeenCalledTimes(1)
     await b.ctx.fiber.dispose()
   })
@@ -404,7 +422,7 @@ describe('ui-workbench browser plugin', () => {
       useWorkspaces={(() => undefined) as never}
     />)
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
-    expect(workbench.getSnapshot()).toEqual({ open: true, sessionId: 's2', openPaths: [], activePath: undefined, tab: 'files' })
+    expect(workbench.getSnapshot()).toEqual({ open: true, sessionId: 's2', openPaths: [], activePath: undefined, tab: 'files', browserUrl: 'https://www.deepseek.com' })
     await b.ctx.fiber.dispose()
   })
 

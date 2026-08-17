@@ -517,13 +517,16 @@ describe('catalog routes with per-model configuration', () => {
   })
 
   it('keeps each model its own endpoint when the catalog route declares none', () => {
-    // `opencode` ships no provider-level endpoint: the address lives on every
-    // catalog model, so the route resolves without any configured baseURL.
-    const resolved = resolveProfiles({ opencode: {} })
-    const models = resolved.get('opencode')?.piProvider.getModels() ?? []
-    expect(models.length).toBeGreaterThan(0)
-    expect(models.every(model => model.baseUrl.length > 0)).toBe(true)
-    expect(resolved.get('opencode')?.piProvider.baseUrl).toBeUndefined()
+    // `opencode` and `opencode-go` ship no provider-level endpoint: the address
+    // lives on every catalog model, so the route resolves without any
+    // configured baseURL.
+    for (const route of ['opencode', 'opencode-go'] as const) {
+      const resolved = resolveProfiles({ [route]: {} })
+      const models = resolved.get(route)?.piProvider.getModels() ?? []
+      expect(models.length).toBeGreaterThan(0)
+      expect(models.every(model => model.baseUrl.length > 0)).toBe(true)
+      expect(resolved.get(route)?.piProvider.baseUrl).toBeUndefined()
+    }
   })
 
   it('repoints a catalog route at another wire protocol without restating its endpoint', () => {
@@ -950,6 +953,10 @@ describe('configurable-provider directory', () => {
     // the key is a path this adapter can serve.
     expect(offered).toContain('anthropic')
     expect(offered).toContain('openai')
+    // OpenCode Zen and OpenCode Zen Go authenticate with an API key, so both
+    // catalog routes keep their entries.
+    expect(offered).toContain('opencode')
+    expect(offered).toContain('opencode-go')
   })
 
   it('still lists a withheld route a stored profile names, as a catalog route', async () => {

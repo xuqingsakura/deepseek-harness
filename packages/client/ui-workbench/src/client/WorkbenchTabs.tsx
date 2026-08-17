@@ -14,13 +14,13 @@ export interface WorkbenchTabsProps {
   /** The active file path (highlighted tab). */
   activePath: string | undefined
   /** Activate one open file. */
-  onSelect(path: string): void
+  onSelect: (path: string) => void
   /** Close one open file. */
-  onClose(path: string): void
+  onClose: (path: string) => void
   /** Close every tab except one. */
-  onCloseOthers(path: string): void
+  onCloseOthers: (path: string) => void
   /** Close every tab. */
-  onCloseAll(): void
+  onCloseAll: () => void
   /** Locale-bound copy. */
   t: TranslateNS<typeof NS>
 }
@@ -69,7 +69,7 @@ export function WorkbenchTabs({ paths, activePath, onSelect, onClose, onCloseOth
             aria-selected={active}
             className={active ? css.tabActive : css.tab}
             title={path}
-            onClick={() => onSelect(path)}
+            onClick={() =>{  onSelect(path) }}
             onContextMenu={(event) => {
               event.preventDefault()
               setMenu({ path, x: event.clientX, y: event.clientY })

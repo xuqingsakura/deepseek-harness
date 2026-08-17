@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-16-desktop-sidebar-toggle-and-workbench-header.md
-2026-08-16-desktop-sidebar-toggle-and-workbench-header.md: 75ef533724885038b96fb99a5f13e32a21629f31
-2026-08-16-desktop-sidebar-toggle-and-workbench-header.zh.md: 51a26e9619b7d66bd41b129075022fd643954d25
+2026-08-16-desktop-sidebar-toggle-and-workbench-header.md: bcf78c791fa68a2c581a48b0a7f06a6aae25cffa
+2026-08-16-desktop-sidebar-toggle-and-workbench-header.zh.md: 0e22cc3b9157435f544cbcd53336cbc1e277f5d7

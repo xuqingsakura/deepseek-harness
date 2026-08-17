@@ -6,7 +6,7 @@ describe('workbench state store', () => {
   it('opens a file: appends it once and activates it', () => {
     const workbench = createWorkbenchState()
     workbench.open('a.txt')
-    expect(workbench.getSnapshot()).toEqual({ open: false, sessionId: undefined, openPaths: ['a.txt'], activePath: 'a.txt', tab: 'files' })
+    expect(workbench.getSnapshot()).toEqual({ open: false, sessionId: undefined, openPaths: ['a.txt'], activePath: 'a.txt', tab: 'files', browserUrl: 'https://www.deepseek.com' })
     workbench.open('b.txt')
     workbench.open('a.txt') // re-open keeps the original position, activates
     expect(workbench.getSnapshot().openPaths).toEqual(['a.txt', 'b.txt'])

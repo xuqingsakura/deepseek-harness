@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-16-desktop-runtime-closure-prune.md
-2026-08-16-desktop-runtime-closure-prune.md: 6cec49fc985441e217f7e06c1c1f21287c0915f7
-2026-08-16-desktop-runtime-closure-prune.zh.md: 3eb57fba0d91cdcfd787603ccb1c29e9fa516f39
+2026-08-16-desktop-runtime-closure-prune.md: 5db0b0eaf6beb8731feaf96acf2321a249a71a3d
+2026-08-16-desktop-runtime-closure-prune.zh.md: a589cc5951be69ea88386a2fad519077cee97bed

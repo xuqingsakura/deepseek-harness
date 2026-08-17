@@ -12,7 +12,7 @@ import css from './DiffViewer.module.css'
 /** The injected git-diff verb the diff viewer needs. */
 export interface DiffViewerInjected {
   /** Unified diff of one path (index or worktree per staged). */
-  gitDiff(sessionId: string, path: string, staged: boolean): Promise<WorkbenchGitDiffResult>
+  gitDiff: (sessionId: string, path: string, staged: boolean) => Promise<WorkbenchGitDiffResult>
 }
 
 /** Full props for the diff viewer. */
@@ -24,7 +24,7 @@ export type DiffViewerProps = DiffViewerInjected & {
   /** Whether to diff the staged (index) or worktree version. */
   staged: boolean
   /** Close the diff view and return to the file content view. */
-  onClose(): void
+  onClose: () => void
   /** Locale-bound copy. */
   t: TranslateNS<typeof NS>
 }
