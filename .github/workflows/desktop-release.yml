@@ -29,13 +29,14 @@ concurrency:
 env:
   PRIMARY_NODE_VERSION: '24'
   DSH_TELEMETRY_DISABLED: '1'
-  # electron-builder.yml's output path is machine-specific; CI overrides it.
-  DSH_PKG_OUTPUT_DIR: ${{ runner.temp }}/dsh-pkg
 
 jobs:
   build-release:
     name: Build installer and publish release
     runs-on: windows-latest
+    env:
+      # electron-builder.yml's output path is machine-specific; CI overrides it.
+      DSH_PKG_OUTPUT_DIR: ${{ runner.temp }}/dsh-pkg
     steps:
       - name: Checkout
         uses: actions/checkout@v6
