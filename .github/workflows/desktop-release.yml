@@ -1,0 +1,136 @@
+# Build the Windows desktop installer from this repo and publish it as a
+# GitHub Release. electron-builder bakes the `publish` config into
+# app-update.yml; the GitHub provider then lets installed builds check for
+# updates via Settings -> About and download/install the newest installer.
+#
+# Trigger: manual dispatch (optionally with a version), or push a v* tag.
+# The release tag is v<version>; prerelease versions (e.g. 0.1.0-rc.50) are
+# marked prerelease and publish rc.yml so the rc channel resolves them.
+name: Desktop Release (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 0.1.0-rc.50. Empty keeps apps/desktop/package.json.'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  DSH_TELEMETRY_DISABLED: '1'
+  # electron-builder.yml's output path is machine-specific; CI overrides it.
+  DSH_PKG_OUTPUT_DIR: ${{ runner.temp }}/dsh-pkg
+
+jobs:
+  build-release:
+    name: Build installer and publish release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store
+        id: pnpm-store
+        shell: pwsh
+        run: |
+          $store = Join-Path $env:LOCALAPPDATA 'pnpm\store'
+          "PNPM_CONFIG_STORE_DIR=$store" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $p = pnpm store path --silent
+          "path=$p" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
+      - name: Restore pnpm cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          $fromInput = "${{ inputs.version }}".Trim()
+          $fromTag = ''
+          $ref = "${{ github.ref }}"
+          if ($ref -like 'refs/tags/v*') { $fromTag = $ref.Substring(11) }
+          $current = (Get-Content 'apps/desktop/package.json' -Raw | ConvertFrom-Json).version
+          $version = if ($fromInput -ne '') { $fromInput } elseif ($fromTag -ne '') { $fromTag } else { $current }
+          if ($version -notmatch '^\d+\.\d+\.\d+') { throw "Invalid release version: $version" }
+          node -e "const fs=require('fs');const p='apps/desktop/package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')" $version
+          "version=$version" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
+      - name: Build host libraries
+        run: pnpm run build:lib:host
+
+      - name: Package desktop installer (NSIS)
+        run: pnpm run package:desktop
+        env:
+          # Optional Authenticode signing: set WIN_CSC_LINK (certificate file
+          # path or base64) and WIN_CSC_KEY_PASSWORD in repo secrets.
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      - name: Stage release assets
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $pkg = $env:DSH_PKG_OUTPUT_DIR
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $dash = "DeepSeek-Harness-Setup-$version"
+          $spaced = "DeepSeek Harness Setup $version.exe"
+          # GitHub provider rewrites spaces to hyphens in download paths, so
+          # the uploaded asset names must use hyphens.
+          Copy-Item (Join-Path $pkg $spaced) (Join-Path 'release-assets' "$dash.exe")
+          $block = Join-Path $pkg "$spaced.blockmap"
+          if (Test-Path $block) { Copy-Item $block (Join-Path 'release-assets' "$dash.exe.blockmap") }
+          # Channel metadata: <prerelease>.yml (e.g. rc.yml) or latest.yml.
+          $channel = if ($version -match '-') { ($version -split '-')[1].Split('.')[0] } else { 'latest' }
+          $channelFile = Join-Path $pkg "$channel.yml"
+          if (-not (Test-Path $channelFile)) { $channelFile = Join-Path $pkg 'latest.yml' }
+          if (-not (Test-Path $channelFile)) { throw "No channel metadata yml found in $pkg" }
+          Copy-Item $channelFile 'release-assets/'
+          if ($version -match '-') { Copy-Item $channelFile 'release-assets/latest.yml' }
+          Get-ChildItem 'release-assets' | ForEach-Object { Write-Output "asset: $($_.Name)" }
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "v$version"
+          # Re-running the workflow rebuilds the same tag's release instead of
+          # failing on a duplicate (the git tag itself is kept).
+          gh release delete $tag --yes 2>$null
+          if ($LASTEXITCODE -ne 0) { Write-Output "no existing release for $tag (delete exit $LASTEXITCODE)" }
+          $prerelease = @()
+          if ($version -match '-') { $prerelease = @('--prerelease') }
+          gh release create $tag 'release-assets/*' --title "DeepSeek Harness v$version" --generate-notes @prerelease

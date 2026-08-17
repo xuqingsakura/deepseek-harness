@@ -45,13 +45,21 @@ run('build client libs', 'pnpm', ['run', 'build:lib:client'], REPO_ROOT)
 run('deploy runtime closure', 'node', ['apps/desktop/scripts/deploy-runtime.mjs'], REPO_ROOT)
 // 3. Compile the Electron shell (main + preload).
 run('build desktop shell', 'pnpm', ['run', 'build'], APP_ROOT)
-// 4. Package the NSIS installer.
-run('package NSIS installer', 'npx', ['electron-builder', '--win', 'nsis', '--publish', 'never'], APP_ROOT)
+// 4. Package the NSIS installer. CI overrides the machine-specific output
+// directory from electron-builder.yml via DSH_PKG_OUTPUT_DIR.
+const pkgArgs = ['electron-builder', '--win', 'nsis', '--publish', 'never']
+const pkgOutputOverride = process.env.DSH_PKG_OUTPUT_DIR?.trim()
+if (pkgOutputOverride !== undefined && pkgOutputOverride !== '') {
+  pkgArgs.push('-c.directories.output=' + pkgOutputOverride)
+}
+run('package NSIS installer', 'npx', pkgArgs, APP_ROOT)
 
 // 5. Land the installer next to its siblings.
 const builderYml = readFileSync(join(APP_ROOT, 'electron-builder.yml'), 'utf8')
 const outputMatch = /^\s*output:\s*(.+)$/m.exec(builderYml)
-const outputDir = outputMatch === null ? join(APP_ROOT, 'dist') : outputMatch[1].trim()
+const outputDir = pkgOutputOverride !== undefined && pkgOutputOverride !== ''
+  ? pkgOutputOverride
+  : (outputMatch === null ? join(APP_ROOT, 'dist') : outputMatch[1].trim())
 const productName = manifest.productName ?? 'DeepSeek Harness'
 const setupName = productName + ' Setup ' + manifest.version + '.exe'
 const source = join(outputDir, setupName)

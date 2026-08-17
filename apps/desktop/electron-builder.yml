@@ -24,10 +24,13 @@ win:
       arch:
         - x64
 publish:
-  # Placeholder channel; the app honors DSH_UPDATE_FEED_URL or
-  # %APPDATA%\dsh-desktop\update-config.json at runtime before this value.
-  - provider: generic
-    url: https://updates.example.invalid/dsh-desktop/
+  # Desktop releases are published to this repo's GitHub Releases by
+  # .github/workflows/desktop-release.yml; the baked app-update.yml lets
+  # Settings -> About check for updates against GitHub. DSH_UPDATE_FEED_URL or
+  # %APPDATA%\dsh-desktop\update-config.json still override at runtime.
+  - provider: github
+    owner: xuqingsakura
+    repo: deepseek-harness
 nsis:
   oneClick: false
   # Always per-machine: the previous per-user/per-machine mix made silent

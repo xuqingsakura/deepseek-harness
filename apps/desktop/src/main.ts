@@ -523,10 +523,16 @@ function wireAutoUpdater(): void {
 /** Apply the configured feed (if any) once, before the first check. */
 function configureUpdater(): void {
   const url = resolveUpdateFeedUrl()
-  if (url === undefined) return
-  autoUpdater.setFeedURL({ provider: 'generic', url })
-  updaterConfigured = true
-  debugLog(`autoUpdater feed: ${url}`)
+  if (url !== undefined) {
+    autoUpdater.setFeedURL({ provider: 'generic', url })
+    updaterConfigured = true
+    debugLog(`autoUpdater feed: ${url}`)
+    return
+  }
+  // Packaged builds embed the release channel in app-update.yml from the
+  // electron-builder `publish` config; let electron-updater load it on the
+  // first check. Dev runs stay silent (no packaged channel).
+  updaterConfigured = app.isPackaged
 }
 
 /**
