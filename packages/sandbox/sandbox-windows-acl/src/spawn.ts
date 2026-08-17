@@ -1,11 +1,12 @@
 /**
  * Restricted-process spawning: anonymous pipes for stdio, STARTUPINFOW with
  * STARTF_USESTDHANDLES, CreateProcessAsUserW under the restricted token, then
- * asynchronous pipe draining and exit waiting. Console isolation
- * (CREATE_NO_WINDOW / CREATE_NEW_CONSOLE) is intentionally absent: under this
- * restriction scheme hidden-console children die with STATUS_DLL_INIT_FAILED
- * (0xC0000142) — verified empirically, see win32-abi.ts. Stdio redirection is
- * pipe-based and unaffected; the child shares the host console.
+ * asynchronous pipe draining and exit waiting. Children are created with
+ * CREATE_NO_WINDOW so a GUI host never flashes a console window per command;
+ * stdio redirection is pipe-based and unaffected (the child shares no
+ * console). The earlier STATUS_DLL_INIT_FAILED (0xC0000142) observation only
+ * occurred with the S-1-2-1 console logon SID in the restricting list, which
+ * the shipped lists omit — see win32-abi.ts.
  * @module @deepseek-ai/dsh-sandbox-windows-acl/spawn
  */
 
@@ -125,7 +126,7 @@ export function spawnSandboxed(
     token, null, commandLine,
     null, null,
     1, // bInheritHandles: required for redirection
-    0, // no creation flags: suspended/no-window variants are unusable under the restriction
+    abi.CREATE_NO_WINDOW, // never show a console window (verified usable without S-1-2-1)
     null, options.cwd,
     startupInfo, processInfo,
   )
@@ -309,7 +310,7 @@ export function spawnSandboxedInherited(
     token, null, commandLine,
     null, null,
     1, // bInheritHandles: the re-enabled std handles must be inheritable
-    abi.CREATE_SUSPENDED, // suspended so job assignment precedes any execution
+    abi.CREATE_SUSPENDED | abi.CREATE_NO_WINDOW, // suspended for job assignment; no console window
     null, options.cwd,
     startupInfo, processInfo,
   )

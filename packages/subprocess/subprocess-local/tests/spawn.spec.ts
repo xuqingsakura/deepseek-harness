@@ -970,3 +970,32 @@ describe('environment and spill-file hardening', () => {
     expect(result.signal).toBe('SIGTERM')
   })
 })
+describe('electron self-executable node runtime', () => {
+  it('sets ELECTRON_RUN_AS_NODE when spawning the pinned Electron executable', async () => {
+    const probe = process.execPath
+    const running = spawnSubprocess(spec('', { argv: [probe, '-e', 'process.stdout.write(process.env.ELECTRON_RUN_AS_NODE ?? \'unset\')'] }), {
+      electronSelfExec: { execPath: probe },
+    })
+    await waitForStdout(running, '1')
+    const result = await finish(running)
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout.text).toBe('1')
+  })
+
+  it('runs a command under the win32 branch (windowsHide applied)', async () => {
+    const probe = process.execPath
+    const running = spawnSubprocess(spec('', { argv: [probe, '-e', 'process.stdout.write("ok")'] }), { platform: 'win32' })
+    await waitForStdout(running, 'ok')
+    const result = await finish(running)
+    expect(result.exitCode).toBe(0)
+  })
+
+  it('leaves ELECTRON_RUN_AS_NODE unset without the seam', async () => {
+    const probe = process.execPath
+    const running = spawnSubprocess(spec('', { argv: [probe, '-e', 'process.stdout.write(process.env.ELECTRON_RUN_AS_NODE ?? \'unset\')'] }), {})
+    await waitForStdout(running, 'unset')
+    const result = await finish(running)
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout.text).toBe('unset')
+  })
+})

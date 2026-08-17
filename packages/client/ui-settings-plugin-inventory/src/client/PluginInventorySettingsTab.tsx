@@ -17,6 +17,25 @@ export interface PluginInventorySettingsTabInjected {
 type PluginInventoryEntry = PluginInventorySnapshot['entries'][number]
 type PluginFiberPhase = PluginInventoryEntry['fiberPhase']
 
+/** Desktop-only bridge surface for toggling external plugins (preload exposes it). */
+interface DesktopPluginBridge {
+  pluginList(): Promise<DesktopPluginInfo[]>
+  pluginSetEnabled(name: string, enabled: boolean): Promise<{ ok: boolean; enabled: boolean }>
+}
+
+/** One installed external plugin as reported by the desktop bridge. */
+interface DesktopPluginInfo {
+  name: string
+  enabled: boolean
+}
+
+/** Live external-plugin toggle state keyed by package name. */
+interface ExternalToggleState {
+  enabled: boolean
+  busy: boolean
+  message: string | undefined
+}
+
 /** Full component props assembled by the Settings slot renderer. */
 export type PluginInventorySettingsTabProps =
   PropsRuntime<'settings.plugins.tab'>
@@ -68,6 +87,11 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
   const [expanded, setExpanded] = useState<PluginInventoryEntry['entryId'] | null>(null)
   const [state, setState] = useState<ViewState>({ status: 'loading' })
 
+  // Desktop builds expose the Electron bridge: keep a live map of installed
+  // external plugins so catalog rows can offer enable/disable. Browser builds
+  // have no bridge and stay read-only.
+  const [external, setExternal] = useState<ReadonlyMap<string, ExternalToggleState>>(() => new Map())
+
   useEffect(() => {
     let current = true
     void Promise.resolve().then(() => list()).then(
@@ -76,6 +100,24 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
     )
     return () => { current = false }
   }, [list, request])
+
+  useEffect(() => {
+    const bridge = (window as { dshDesktop?: DesktopPluginBridge }).dshDesktop
+    if (bridge === undefined) return
+    let current = true
+    void bridge.pluginList().then(
+      (plugins) => {
+        if (!current) return
+        const map = new Map<string, ExternalToggleState>()
+        for (const plugin of plugins) map.set(plugin.name, { enabled: plugin.enabled, busy: false, message: undefined })
+        setExternal(map)
+      },
+      () => {
+        // The bridge exists but its list failed; keep the catalog read-only.
+      },
+    )
+    return () => { current = false }
+  }, [list])
 
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const filteredEntries = useMemo(
@@ -94,6 +136,24 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
   const retry = (): void => {
     setState({ status: 'loading' })
     setRequest(value => value + 1)
+  }
+
+  const toggleExternal = async (name: string, enabled: boolean): Promise<void> => {
+    const bridge = (window as { dshDesktop?: DesktopPluginBridge }).dshDesktop
+    if (bridge === undefined) return
+    setExternal(current => new Map(current).set(name, { enabled, busy: true, message: undefined }))
+    try {
+      const result = await bridge.pluginSetEnabled(name, !enabled)
+      setExternal(current => new Map(current).set(name, { enabled: result.enabled, busy: false, message: undefined }))
+      // Re-read the Loader inventory so the row reflects the new enablement.
+      setRequest(value => value + 1)
+    } catch (error) {
+      setExternal(current => new Map(current).set(name, {
+        enabled,
+        busy: false,
+        message: error instanceof Error ? error.message : String(error),
+      }))
+    }
   }
 
   return (
@@ -134,6 +194,7 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
                 const configuration = t(entry.enabled ? 'enabledTag' : 'disabledTag')
                 const open = expanded === entry.entryId
                 const detailId = `${catalogId}-details-${encodeURIComponent(entry.entryId)}`
+                const managed = external.get(entry.moduleName)
                 return (
                   <li
                     className={css.card}
@@ -183,6 +244,20 @@ export function PluginInventorySettingsTab({ list, t }: PluginInventorySettingsT
                             </div>
                           ) : null}
                         </dl>
+                        {managed !== undefined ? (
+                          <div className={css.detailActions}>
+                            <button
+                              type="button"
+                              disabled={managed.busy}
+                              onClick={() => { void toggleExternal(entry.moduleName, managed.enabled) }}
+                            >
+                              {managed.enabled ? t('disable') : t('enable')}
+                            </button>
+                            {managed.message !== undefined ? (
+                              <span className={css.detailError} role="alert">{managed.message}</span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </li>

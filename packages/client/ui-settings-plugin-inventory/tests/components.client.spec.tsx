@@ -149,3 +149,42 @@ describe('PluginInventorySettingsTab', () => {
     await act(async () => { deferredFailure.reject(new Error('late failure')) })
   })
 })
+describe('PluginInventorySettingsTab desktop enable/disable', () => {
+  it('shows an enable button for a disabled external plugin and toggles it via the bridge', async () => {
+    const toggle = vi.fn((_name: string, enabled: boolean) => Promise.resolve({ ok: true, enabled }))
+    ;(globalThis as { dshDesktop?: unknown }).dshDesktop = {
+      pluginList: vi.fn(() => Promise.resolve([
+        { name: 'whale-girl', enabled: false },
+        { name: 'dsh-workbench', enabled: true },
+      ])),
+      pluginSetEnabled: toggle,
+    }
+    const snapshot = {
+      entries: [
+        { entryId: 'wg', moduleName: 'whale-girl', enabled: false, fiberPhase: null },
+        { entryId: 'wb', moduleName: 'dsh-workbench', enabled: true, fiberPhase: 'active' },
+        { entryId: 'base', moduleName: '@deepseek-ai/dsh-base', enabled: true, fiberPhase: 'active' },
+      ],
+    } as unknown as Snapshot
+    const list = vi.fn(() => Promise.resolve(snapshot))
+    render(<PluginInventorySettingsTab {...props(list)} />)
+    await waitFor(() => { expect(screen.getByRole('searchbox', { name: en.search })).toBeTruthy() })
+
+    // A disabled external plugin offers Enable from its expanded details.
+    fireEvent.click(screen.getByRole('button', { name: 'whale-girl, Disabled' }))
+    fireEvent.click(screen.getByRole('button', { name: en.enable }))
+    await waitFor(() => { expect(toggle).toHaveBeenCalledWith('whale-girl', true) })
+    // The successful toggle re-reads the Loader inventory.
+    await waitFor(() => { expect(list).toHaveBeenCalledTimes(2) })
+
+    // An enabled external plugin offers Disable.
+    fireEvent.click(screen.getByRole('button', { name: 'workbench, Mounted, Enabled' }))
+    expect(screen.getByRole('button', { name: en.disable })).toBeTruthy()
+
+    // A non-external loader row stays read-only.
+    fireEvent.click(screen.getByRole('button', { name: 'base, Mounted, Enabled' }))
+    expect(screen.queryByRole('button', { name: en.disable })).toBeNull()
+
+    delete (globalThis as { dshDesktop?: unknown }).dshDesktop
+  })
+})

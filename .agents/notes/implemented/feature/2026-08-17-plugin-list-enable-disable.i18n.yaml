@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-17-plugin-list-enable-disable.md
+2026-08-17-plugin-list-enable-disable.md: 5d773b9ecf93e60dca84351a7df9c929d554adde
+2026-08-17-plugin-list-enable-disable.zh.md: 679806747ac68a49e03fd0accc9dedbaf76b23dc

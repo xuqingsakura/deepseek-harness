@@ -56,6 +56,12 @@ export interface SpawnInternals {
   platform?: NodeJS.Platform
   /** Linux process-group member probe (defaults to `/proc` inspection). */
   linuxProcessGroupHasLiveMembers?: (processGroupId: number) => boolean | undefined
+  /**
+   * Test seam for the Electron self-executable Node-runtime detection:
+   * production reads `process.versions.electron` plus `process.execPath`; the
+   * seam pins the binary so plain-node test hosts can exercise the flag.
+   */
+  electronSelfExec?: { execPath: string } | undefined
 }
 
 /**
@@ -347,6 +353,17 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
   const stdinMode = spec.stdio.stdin
 
   const env = childEnv(spec.env)
+  // The Electron main process (the desktop's in-process host) reuses its own
+  // executable as the Node runtime for the windows-acl sandbox runner. Without
+  // ELECTRON_RUN_AS_NODE the executable starts as a GUI app instead, and the
+  // app's single-instance lock makes the second instance exit immediately
+  // (status 0, no output), so the runner never runs. The variable is harmless
+  // for a real node executable, so the override applies to the same binary only.
+  const electronExecPath = internals.electronSelfExec?.execPath
+    ?? (process.versions.electron !== undefined ? process.execPath : undefined)
+  if (electronExecPath !== undefined && program === electronExecPath) {
+    env.ELECTRON_RUN_AS_NODE = '1'
+  }
   const child = spawn(program, args, {
     cwd: spec.cwd,
     env,
@@ -358,6 +375,11 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
     // `detached` gives teardown a tree root on POSIX (its own process group);
     // Windows terminates by root pid through taskkill /T instead.
     detached: platform !== 'win32',
+    // Windows: the desktop host is a GUI app, so a spawned console child would
+    // flash a console window per command without CREATE_NO_WINDOW. Piped stdio
+    // is unaffected (the windows-acl runner's confined child inherits pipes,
+    // not a console). POSIX has no console-window concept.
+    windowsHide: platform === 'win32',
   })
 
   const collectStream = (mode: SubprocessOutputMode, stream: Readable | null, label: string): OutputCollector | undefined => {

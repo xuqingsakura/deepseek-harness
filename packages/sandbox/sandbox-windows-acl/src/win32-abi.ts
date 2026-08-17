@@ -17,9 +17,10 @@
  *    correct WinConsoleLogonSid does produce a valid S-1-2-1, but the child
  *    then still dies with STATUS_DLL_INIT_FAILED (0xC0000142) whenever
  *    CREATE_NO_WINDOW / CREATE_NEW_CONSOLE is used.
- *  - Console isolation: under this restriction scheme a hidden console is not
- *    attainable, so children share the host console (stdio redirection is
- *    pipe-based and unaffected).
+ *  - Console isolation: CREATE_NO_WINDOW is usable when the restricting list
+ *    omits S-1-2-1 (the shipped lists do), so confined children run without a
+ *    console window and stdio stays pipe-based. The 0xC0000142 failure above
+ *    is specific to the S-1-2-1-bearing list.
  * @module @deepseek-ai/dsh-sandbox-windows-acl/win32-abi
  */
 
@@ -149,6 +150,8 @@ export const MAX_PATH = 260
 // assign it to the kill-on-close job before any of its code runs.
 /** CREATE_SUSPENDED: create the child with its primary thread suspended until ResumeThread. */
 export const CREATE_SUSPENDED = 0x4
+/** CREATE_NO_WINDOW: the child runs without a console window (experiment). */
+export const CREATE_NO_WINDOW = 0x08000000
 // winbase.h lines ~497-499: GetStdHandle selectors.
 /** STD_INPUT_HANDLE: GetStdHandle selector for the standard input. */
 export const STD_INPUT_HANDLE = -10

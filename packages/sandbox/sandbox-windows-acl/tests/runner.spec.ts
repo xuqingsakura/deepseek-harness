@@ -176,6 +176,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     try {
       const probe = [
         "$ErrorActionPreference='SilentlyContinue';",
+        '[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false);',
         `try{Set-Content -Path '${seamWorkspace}\\server-granted.txt' -Value ok -ErrorAction Stop;'WORKSPACE-WRITE: OK'}catch{'WORKSPACE-WRITE: DENIED'};`,
         `try{Set-Content -Path '${privateTemp}\\server-granted.txt' -Value ok -ErrorAction Stop;'PRIVATE-TEMP-WRITE: OK'}catch{'PRIVATE-TEMP-WRITE: DENIED'};`,
         "'TEMP-ENV: ' + $env:TEMP;",

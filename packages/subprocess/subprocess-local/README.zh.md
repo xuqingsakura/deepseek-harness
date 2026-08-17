@@ -26,6 +26,8 @@
 ## 已知限制与暂缓事项
 
 - **Windows 进程树支持仅为尽力而为**：终止经由 `taskkill /PID <pid> /T /F` 完成，所有结果都被就地吸收，不向外抛出（进程树已不存在、竞态、二进制缺失），存活探测则回退到直接子进程边界。
+- **Electron 自执行 spawn 以 Node 模式运行**：当被 spawn 的程序就是当前运行的 Electron 可执行文件（`process.execPath`）时，子进程环境会加入 `ELECTRON_RUN_AS_NODE=1`，使 JS 入口作为 Node 脚本运行而不是再启动一个 GUI 实例（桌面端 in-process host 正是靠这一点运行 windows-acl 沙箱 runner）。
+- **Windows 子进程无窗口运行**：`spawnSubprocess` 在 win32 上应用 `windowsHide`（CREATE_NO_WINDOW），GUI 宿主不会为每条命令闪现控制台窗口；管道 stdio 不受影响。
 - **终端进程检查仅支持 Linux／macOS**：检查器没有受支持的平台实现时，终端原语会失败；Linux 精确探针覆盖 x64 与 arm64，macOS 则使用 `ps` 快照。
 - **守护化的终端后代仍可能逃出可观察边界**：在 macOS 上，子进程如果在任何前台检查快照之前重新设定父进程，将无法再从 `node-pty` 根进程发现；在 Linux 上，调用 `setsid` 的子进程会同时离开进程树与自有终端会话。本地提供方不会新增持续进程表监视器。
 - **进程内清理要求退出阶段仍能执行 JavaScript**：直接 `process.exit()`、默认未捕获异常和默认未处理 rejection 会发出 Node 同步 `exit` 事件。未安装 handler 时，`SIGTERM`、`SIGINT` 或 `SIGHUP` 的默认 OS 处置不会发出该事件；应用只有安装执行正常 dispose 或调用 `process.exit()` 的 handler 才能覆盖这些信号。`SIGKILL`、fatal OOM、`process.abort()`、native crash、断电，以及任何无法运行 JavaScript 的故障，都需要外部 supervisor、容器 init 或等价的 OS 所有者负责。
