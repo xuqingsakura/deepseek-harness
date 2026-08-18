@@ -9,7 +9,7 @@
 // their branch action is enabled only when the node is also the completed
 // turn's transcript tail. Think / tool-head-only nodes stay chrome-free.
 
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -33,6 +33,17 @@ export interface AssistantMarkdownProps {
   t: ChatViewSlotProps['t']
 }
 
+/**
+ * Long-reply windowing: once a single assistant message dwarfs the viewport,
+ * fold its settled head behind one expand control and keep rendering the
+ * trailing window. The fold is a UI window only — the node keeps the full
+ * block list, so expanding restores the exact same content, and the trailing
+ * text block keeps streaming through the incremental markdown parser.
+ */
+const FOLD_BLOCK_MIN = 120
+/** Blocks kept rendered after the head fold. */
+const FOLD_KEEP_TAIL = 60
+
 /** Reasoning block as the Think variant summary row (figma 39:28304). */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   blocks, streaming, interrupted, loadImage, mentions, t,
@@ -41,6 +52,11 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
   const codeLabels = useMemo(() => ({ copyLabel: t('copy'), copiedLabel: t('copied') }), [t])
+  // Fold the settled head automatically once the reply exceeds the window;
+  // an explicit expand opts out for this message (growing tail stays open).
+  const [userExpanded, setUserExpanded] = useState(false)
+  const foldedHead = !userExpanded && blocks.length > FOLD_BLOCK_MIN
+  const hidden = foldedHead ? blocks.length - FOLD_KEEP_TAIL : 0
   const last = blocks.length - 1
   // Tool-call heads render as tool rows in the chat view's grouping pass, so
   // a node that is only those heads (or empty) would paint an empty root
@@ -50,7 +66,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     || blocks.some(block => block.kind !== 'tool-call')
   if (!hasVisible) return null
   const rendered: ReactNode[] = []
-  for (let i = 0; i < blocks.length; i++) {
+  for (let i = hidden; i < blocks.length; i++) {
     const block = blocks[i]
     if (block === undefined) continue
     switch (block.kind) {
@@ -98,6 +114,14 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
           />,
         )
     }
+  }
+  if (hidden > 0) {
+    rendered.unshift(
+      <button type="button" className={css.foldHead} onClick={() => { setUserExpanded(true) }}>
+        <span>{t('message.foldHead', { count: hidden })}</span>
+        <span className={css.foldExpand}>{t('message.foldExpand')}</span>
+      </button>,
+    )
   }
   return (
     <div className={css.root} data-streaming={streaming || undefined}>

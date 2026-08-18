@@ -86,7 +86,10 @@ if (!existsSync(runtimeDshLib)) {
     '--filter', '@deepseek-ai/dsh-desktop-host-pkg',
     'deploy', '--legacy', '--prod',
     '--config.node-linker=hoisted',
-    '--config.auto-install-peers=false',
+    // Peers must auto-install: pnpm deploy otherwise drops workspace
+    // packages that declare only peerDependencies (dsh-shell, dsh-bash-local,
+    // dsh-subagent-in-process-driver, the hooks/sdk seam packages), and the
+    // web profile imports several of them at loader-entry time.
     '--config.link-workspace-packages=true',
     '--config.confirm-modules-purge=false',
     deployTarget,

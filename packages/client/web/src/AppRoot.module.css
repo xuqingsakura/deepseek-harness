@@ -6,7 +6,11 @@
 .boot {
   height: 100%;
   display: grid;
-  place-items: center;
+  /* The safe keyword keeps the centered card fully reachable when a long
+     boot-failure list overflows: plain center would clip its top with no
+     scroll. */
+  place-items: safe center;
+  overflow: auto;
   background: var(--dsw-alias-bg-base, #f9fafb);
 }
 

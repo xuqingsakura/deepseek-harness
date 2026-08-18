@@ -79,7 +79,7 @@ function ModelRetryItem({ node, active, t }: {
     if (updateCountdown() === 1) return
     const timer = window.setInterval(() => {
       if (updateCountdown() === 1) window.clearInterval(timer)
-    }, 250)
+    }, 1_000)
     return () => { window.clearInterval(timer) }
   }, [active, deadline])
 

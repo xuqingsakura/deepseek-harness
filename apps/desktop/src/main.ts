@@ -120,6 +120,32 @@ const HOST_URL_RE = /dsh web: (https?:\/\/\S+)/
 /** Smoke-mode render wait: how long to poll the React root before failing. */
 const SMOKE_TIMEOUT_MS = 20_000
 
+/** Inline splash shown while the host boots, so the window appears instantly. */
+const SPLASH_HTML = [
+  '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>',
+  'html,body{height:100%;margin:0;background:#0d1117;color:#eef0f3;font-family:system-ui,"Segoe UI","Microsoft YaHei",sans-serif;display:flex;align-items:center;justify-content:center;}',
+  '.wrap{text-align:center;}',
+  '.spinner{width:24px;height:24px;border:3px solid rgb(238 240 243 / .25);border-top-color:#eef0f3;border-radius:50%;margin:0 auto 18px;animation:spin 1s linear infinite;}',
+  '@keyframes spin{to{transform:rotate(360deg);}}',
+  '.name{font-size:18px;font-weight:600;letter-spacing:.02em;}',
+  '.hint{font-size:12px;color:rgb(238 240 243 / .55);margin-top:8px;}',
+  '</style></head><body><div class="wrap"><div class="spinner"></div><div class="name">DeepSeek Harness</div><div class="hint">正在启动…</div></div></body></html>',
+].join('')
+const SPLASH_DATA_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(SPLASH_HTML)
+
+/** Escape text for embedding in the inline splash HTML. */
+function escapeHtml(text: string): string {
+  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+}
+
+/** Splash variant reporting a host boot failure; URL-encoded for loadURL. */
+function errorSplashDataUrl(error: unknown): string {
+  const detail = String(error instanceof Error ? error.message : error).slice(0, 800)
+  const html = SPLASH_HTML
+    .replace('<div class="hint">正在启动…</div>', '<div class="hint">启动失败：<br>' + escapeHtml(detail) + '</div>')
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
+}
+
 interface Deferred<T> {
   promise: Promise<T>
   resolve: (value: T) => void
@@ -256,7 +282,7 @@ async function waitForRender(window: BrowserWindow, timeoutMs: number): Promise<
 }
 
 /** Create the main window over the host URL. */
-function createMainWindow(url: string, onClosed: () => void): BrowserWindow {
+function createMainWindow(url: string | undefined, onClosed: () => void): BrowserWindow {
   const saved = loadWindowState()
   const window = new BrowserWindow({
     ...(saved !== undefined
@@ -363,7 +389,12 @@ function createMainWindow(url: string, onClosed: () => void): BrowserWindow {
       event.preventDefault()
     }
   })
-  void window.loadURL(url)
+  if (url !== undefined) {
+    void window.loadURL(url)
+  } else {
+    // Host still booting: paint the splash so the launch feels immediate.
+    void window.loadURL(SPLASH_DATA_URL)
+  }
   return window
 }
 
@@ -854,7 +885,6 @@ if (GEN_ICON_DIR !== undefined) {
     // Always route to the host origin: the renderer's own origin must not
     // dictate where the bridge may send (and the host URL is the only target).
     const target = new URL(incoming.pathname + incoming.search, hostBaseUrl)
-    console.log('[dsh-bridge] api-fetch', target.pathname)
     const response = await fetch(target, {
       method,
       ...(typeof headers === 'object' && headers !== null ? { headers: headers as Record<string, string> } : {}),
@@ -869,6 +899,69 @@ if (GEN_ICON_DIR !== undefined) {
     }
   })
 
+
+
+  /** Trace-gated log: off unless DSH_DESKTOP_TRACE=1 (packaged console is a dead pipe). */
+  function traceLog(message: string): void {
+    if (process.env.DSH_DESKTOP_TRACE?.trim() === '1') console.log(message)
+  }
+
+  /** Pending frames for one (sender, channel) stream before its IPC flush. */
+  interface ApiFrameBatch {
+    sender: Electron.WebContents
+    channel: 'mux' | 'host'
+    frames: unknown[]
+    timer: NodeJS.Timeout | undefined
+  }
+  const apiFrameBatches = new Map<string, ApiFrameBatch>()
+  /** Coalesce window: at most one IPC send per interval per stream. */
+  const API_FRAME_FLUSH_MS = 8
+  /** Hard cap so a runaway stream cannot grow the pending queue unboundedly. */
+  const API_FRAME_MAX_BATCH = 256
+
+  /**
+   * Forward one host frame to the renderer through a coalescing batch. Bursts
+   * of session events (token deltas, tool views) collapse into a few IPC
+   * messages instead of one round-trip per frame, which keeps the renderer's
+   * event loop from drowning during fast streams.
+   */
+  function queueApiFrame(sender: Electron.WebContents, channel: 'mux' | 'host', envelope: unknown): void {
+    const key = `${sender.id}:${channel}`
+    let batch = apiFrameBatches.get(key)
+    if (batch === undefined) {
+      batch = { sender, channel, frames: [], timer: undefined }
+      apiFrameBatches.set(key, batch)
+    }
+    batch.frames.push(envelope)
+    if (batch.frames.length >= API_FRAME_MAX_BATCH) {
+      flushApiFrame(key, batch)
+      return
+    }
+    if (batch.timer === undefined) {
+      batch.timer = setTimeout(() => { flushApiFrame(key, batch) }, API_FRAME_FLUSH_MS)
+    }
+  }
+
+  /** Send a batch's accumulated frames (if any) as one IPC message. */
+  function flushApiFrame(key: string, batch: ApiFrameBatch): void {
+    if (batch.timer !== undefined) {
+      clearTimeout(batch.timer)
+      batch.timer = undefined
+    }
+    apiFrameBatches.delete(key)
+    if (batch.frames.length === 0 || batch.sender.isDestroyed()) return
+    batch.sender.send('dsh:api-frame', batch.channel, batch.frames)
+  }
+
+  /** Drop pending batches owned by a destroyed renderer. */
+  function dropApiFrameBatches(contentsId: number): void {
+    for (const [key, batch] of apiFrameBatches) {
+      if (batch.sender.id !== contentsId) continue
+      if (batch.timer !== undefined) clearTimeout(batch.timer)
+      apiFrameBatches.delete(key)
+    }
+  }
+
   const apiSockets = new Map<string, { socket: WebSocket }>()
 
   ipcMain.on('dsh:api-stream-subscribe', (event, channel: unknown) => {
@@ -880,7 +973,7 @@ if (GEN_ICON_DIR !== undefined) {
     socketUrl.protocol = socketUrl.protocol === 'https:' ? 'wss:' : 'ws:'
     const socket = new WebSocket(socketUrl)
     apiSockets.set(key, { socket })
-    console.log('[dsh-bridge] stream subscribe', channel)
+    traceLog(`[dsh-bridge] stream subscribe ${channel}`)
     socket.addEventListener('open', () => {
       if (!event.sender.isDestroyed()) event.sender.send('dsh:api-stream-open', channel)
     })
@@ -893,7 +986,7 @@ if (GEN_ICON_DIR !== undefined) {
         return
       }
       notifyForAttention(envelope)
-      event.sender.send('dsh:api-frame', channel, envelope)
+      queueApiFrame(event.sender, channel, envelope)
     })
     socket.addEventListener('close', () => {
       if (apiSockets.get(key)?.socket === socket) apiSockets.delete(key)
@@ -905,6 +998,7 @@ if (GEN_ICON_DIR !== undefined) {
   ipcMain.on('dsh:api-stream-unsubscribe', (event, channel: unknown) => {
     if (typeof channel !== 'string') return
     apiSockets.get(`${event.sender.id}:${channel}`)?.socket.close()
+    dropApiFrameBatches(event.sender.id)
   })
 
   app.on('web-contents-created', (_event, contents) => {
@@ -912,6 +1006,7 @@ if (GEN_ICON_DIR !== undefined) {
       for (const [key, entry] of apiSockets) {
         if (key.startsWith(`${contents.id}:`)) entry.socket.close()
       }
+      dropApiFrameBatches(contents.id)
     })
   })
 
@@ -980,46 +1075,50 @@ if (GEN_ICON_DIR !== undefined) {
       const home = harnessHome()
       const desktopPort = await pickLoopbackPort()
       const overlayPath = browsePickerOverlayPath()
-      if (process.env.DSH_DESKTOP_HOST?.trim() === 'child') {
-        host = startHost(desktopPort, overlayPath, (line) =>{  console.log(`[dsh-host] ${line}`) })
-      } else {
-        const runtimeRoot = app.isPackaged
-          ? join(process.resourcesPath, 'runtime', 'host-deploy')
-          : join(APP_ROOT, 'out', 'runtime', 'host-deploy')
-        const inProcess = await startHostInProcess({
-          runtimeRoot,
-          home,
-          overlayPath,
-          port: desktopPort,
-          onExit: (code) => {
-            if (!SMOKE) app.exit(code)
-          },
-        })
-        liveHostControls = inProcess.controls
-        host = {
-          url: Promise.resolve(inProcess.url),
-          exited: inProcess.exited,
-          kill: () => void inProcess.dispose(),
-          picker: inProcess.directoryPicker,
-        }
-        console.log(`[dsh-desktop] host mode: in-process (${inProcess.url})`)
-      }
-      // An unexpected host death tears the shell down too; a deliberate quit
-      // already killed it in `before-quit`, so `quitting` suppresses this path.
-      void host.exited.then(() => {
-        if (!quitting) {
-          console.error('[dsh-desktop] host exited unexpectedly; closing the shell')
-          app.quit()
-        }
+      // Create the window before the host is ready: the splash paints
+      // immediately and the host URL replaces it once boot settles. A boot
+      // failure swaps in an error page instead of a frozen splash.
+      const window = createMainWindow(undefined, () => {
+        if (!SMOKE) app.quit()
       })
       try {
+        if (process.env.DSH_DESKTOP_HOST?.trim() === 'child') {
+          host = startHost(desktopPort, overlayPath, (line) =>{  console.log(`[dsh-host] ${line}`) })
+        } else {
+          const runtimeRoot = app.isPackaged
+            ? join(process.resourcesPath, 'runtime', 'host-deploy')
+            : join(APP_ROOT, 'out', 'runtime', 'host-deploy')
+          const inProcess = await startHostInProcess({
+            runtimeRoot,
+            home,
+            overlayPath,
+            port: desktopPort,
+            onExit: (code) => {
+              if (!SMOKE) app.exit(code)
+            },
+          })
+          liveHostControls = inProcess.controls
+          host = {
+            url: Promise.resolve(inProcess.url),
+            exited: inProcess.exited,
+            kill: () => void inProcess.dispose(),
+            picker: inProcess.directoryPicker,
+          }
+          console.log(`[dsh-desktop] host mode: in-process (${inProcess.url})`)
+        }
+        // An unexpected host death tears the shell down too; a deliberate quit
+        // already killed it in `before-quit`, so `quitting` suppresses this path.
+        void host.exited.then(() => {
+          if (!quitting) {
+            console.error('[dsh-desktop] host exited unexpectedly; closing the shell')
+            app.quit()
+          }
+        })
         const url = await host.url
         hostBaseUrl = url
         debugLog(`host ready at ${url}`)
         console.log(`[dsh-desktop] host ready at ${url}`)
-        const window = createMainWindow(url, () => {
-          if (!SMOKE) app.quit()
-        })
+        if (!window.isDestroyed()) void window.loadURL(url)
         if (!SMOKE) {
           tray = createTray(() => window)
           console.log('[dsh-desktop] tray created')
@@ -1132,8 +1231,10 @@ if (GEN_ICON_DIR !== undefined) {
         }
       } catch (error) {
         console.error('[dsh-desktop] host failed to start:', error)
-        host.kill()
-        app.exit(1)
+        // Swap the splash for an error page and let it paint before closing.
+        if (!window.isDestroyed()) void window.loadURL(errorSplashDataUrl(error))
+        host?.kill()
+        setTimeout(() =>{  app.exit(1) }, 3000)
       }
     })
   }

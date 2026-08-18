@@ -13,6 +13,12 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  /* Desktop shell: the page itself must never scroll. Every scrolling region
+     is an internal container (chat, file tree, viewer, settings options); a
+     page-level scrollbar would paint a full-height bar on the window's right
+     edge and let wheel/drag scroll the whole interface. Plugins may not rely
+     on document scroll. */
+  overflow: hidden;
 }
 
 body {

@@ -118,11 +118,20 @@ function TurnStatus({ startTime, t }: {
   const [elapsedMs, setElapsedMs] = useState(() => Math.max(0, Date.now() - anchor))
   useEffect(() => {
     const tick = (): void => {
+      // Skipping while hidden saves the per-second wakeups and state churn
+      // (Chromium also throttles hidden-page timers; this removes the work).
+      if (document.visibilityState !== 'visible') return
       setElapsedMs(Math.max(0, Date.now() - anchor))
     }
     tick()
     const id = setInterval(tick, 1000)
-    return () => { clearInterval(id) }
+    // Re-sync the instant the document becomes visible again.
+    const onVisibility = (): void => { if (document.visibilityState === 'visible') tick() }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [anchor])
   // Short turns keep the plain label; the clock only appears once the turn
   // has clearly been running for a while.
@@ -183,6 +192,11 @@ export function ChatView({
    *  scroll-driven at-bottom chrome re-render (which would snap inertial
    *  scrolls the rest of the way to the floor). */
   const followSigRef = useRef<string | null>(null)
+  /** Coalesces scroll passes to one per animation frame. */
+  const scrollRafRef = useRef<number | null>(null)
+  /** Guard against a second schedule while one pass is pending (also correct
+   *  under a synchronous requestAnimationFrame shim). */
+  const scrollScheduledRef = useRef(false)
 
   const firstKey = order[0]
   const firstSeq = firstKey === undefined ? null : nodeStore.get(firstKey)?.anchorSeq ?? null
@@ -263,39 +277,49 @@ export function ChatView({
 
   const onScrollRef = useRef(() => {})
   onScrollRef.current = () => {
-    const local = listRef.current
-    /* v8 ignore next -- ref-null guard: the handler only fires while mounted. */
-    if (local === null) return
-    const el = scrollerOf(local)
-    // Only reader input may make raw scroll geometry change follow ownership:
-    // a delivered position that deviates from the observed-top ledger (every
-    // programmatic write records itself there synchronously). This covers
-    // wheel, touch, scrollbar, and keyboard alike without naming devices.
-    // Browser shrink-clamps land exactly on the floor min and delayed
-    // programmatic deliveries land on the ledger itself, so both preserve
-    // the current ownership state.
-    const floor = Math.max(0, el.scrollHeight - el.clientHeight)
-    const movedByReader = Math.abs(el.scrollTop - Math.min(observedTopRef.current, floor)) > 0.5
-    const isAtBottom = movedByReader
-      ? floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
-      : atBottomRef.current
-    if (!movedByReader && isAtBottom) {
-      toBottom(el)
-      return
-    }
-    atBottomRef.current = isAtBottom
-    setAtBottom(isAtBottom)
-    const position = isAtBottom ? null : scrollPosition(local, el)
-    if (isAtBottom) {
-      anchorRef.current = null
-    } else if (anchorRef.current !== null && position !== null) {
-      anchorRef.current = { key: position.anchorKey, top: position.anchorTop }
-    }
-    // Continuous save (unmount happens after ref detach, so saving there is
-    // too late); pinned-to-bottom clears so a remount keeps following.
-    if (isAtBottom) chatScroll.save(null)
-    else if (position !== null) chatScroll.save(position)
-    observedTopRef.current = el.scrollTop
+    // Coalesce per animation frame: wheel/touch deltas can fire several
+    // scroll events per frame, and each pass reads layout (elementsFromPoint
+    // + getBoundingClientRect). One pass per frame keeps fast scrolling
+    // cheap; the painted frame is identical either way.
+    if (scrollScheduledRef.current) return
+    scrollScheduledRef.current = true
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollScheduledRef.current = false
+      scrollRafRef.current = null
+      const local = listRef.current
+      /* v8 ignore next -- ref-null guard: the handler only fires while mounted. */
+      if (local === null) return
+      const el = scrollerOf(local)
+      // Only reader input may make raw scroll geometry change follow ownership:
+      // a delivered position that deviates from the observed-top ledger (every
+      // programmatic write records itself there synchronously). This covers
+      // wheel, touch, scrollbar, and keyboard alike without naming devices.
+      // Browser shrink-clamps land exactly on the floor min and delayed
+      // programmatic deliveries land on the ledger itself, so both preserve
+      // the current ownership state.
+      const floor = Math.max(0, el.scrollHeight - el.clientHeight)
+      const movedByReader = Math.abs(el.scrollTop - Math.min(observedTopRef.current, floor)) > 0.5
+      const isAtBottom = movedByReader
+        ? floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
+        : atBottomRef.current
+      if (!movedByReader && isAtBottom) {
+        toBottom(el)
+        return
+      }
+      atBottomRef.current = isAtBottom
+      setAtBottom(isAtBottom)
+      const position = isAtBottom ? null : scrollPosition(local, el)
+      if (isAtBottom) {
+        anchorRef.current = null
+      } else if (anchorRef.current !== null && position !== null) {
+        anchorRef.current = { key: position.anchorKey, top: position.anchorTop }
+      }
+      // Continuous save (unmount happens after ref detach, so saving there is
+      // too late); pinned-to-bottom clears so a remount keeps following.
+      if (isAtBottom) chatScroll.save(null)
+      else if (position !== null) chatScroll.save(position)
+      observedTopRef.current = el.scrollTop
+    })
   }
 
   // Bind the scroll listener on the resolved scrollport once per mount;
@@ -310,6 +334,8 @@ export function ChatView({
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       el.removeEventListener('scroll', onScroll)
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
+      scrollRafRef.current = null
     }
   }, [])
 

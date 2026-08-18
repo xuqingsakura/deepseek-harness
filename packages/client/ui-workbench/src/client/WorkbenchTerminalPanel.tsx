@@ -66,11 +66,19 @@ export function WorkbenchTerminalPanel({
   verbs.current = { terminalSpawn, terminalWrite, terminalRead, terminalClose, terminalCloseSession }
   const viewsRef = useRef(views)
   viewsRef.current = views
+  const sessionIdRef = useRef(sessionId)
+  sessionIdRef.current = sessionId
+  // Every live output poll, so a session switch or unmount can stop them all:
+  // a poll left behind keeps issuing IPC reads against a torn-down shell.
+  const pollRef = useRef<Set<number>>(new Set())
 
   // Tear down every shell when the bound session changes or the panel unmounts.
   useEffect(() => {
     const previousSession = sessionId
     return () => {
+      // Stop every output poll before tearing down shells.
+      for (const id of pollRef.current) clearInterval(id)
+      pollRef.current.clear()
       void verbs.current.terminalCloseSession(previousSession)
     }
   }, [sessionId])
@@ -88,24 +96,33 @@ export function WorkbenchTerminalPanel({
       setActiveId(result.session.id)
       // Poll this terminal's output until it exits.
       const poll = setInterval(() => {
+        // A session switch or unmount must stop the poll immediately:
+        // otherwise it keeps issuing IPC reads against a torn-down shell.
+        if (sessionIdRef.current !== sessionId) {
+          clearInterval(poll)
+          pollRef.current.delete(poll)
+          return
+        }
         void verbs.current.terminalRead(sessionId, result.session.id)
           .then((read) => {
             const current = viewsRef.current.find(v => v.id === result.session.id)
-            if (current === undefined) { clearInterval(poll); return }
+            if (current === undefined) { clearInterval(poll); pollRef.current.delete(poll); return }
             if (read.delta.length > 0) updateView(result.session.id, { output: current.output + read.delta })
             if (read.session.status === 'exited') {
               updateView(result.session.id, { running: false })
               clearInterval(poll)
+              pollRef.current.delete(poll)
             }
           })
           .catch((caught: unknown) => {
             // The tab was closed while this poll was in flight: the host
             // already dropped the terminal, so stop polling without an error.
             const current = viewsRef.current.find(v => v.id === result.session.id)
-            if (current === undefined) { clearInterval(poll); return }
+            if (current === undefined) { clearInterval(poll); pollRef.current.delete(poll); return }
             setError(caught instanceof Error ? caught.message : String(caught))
           })
       }, POLL_MS)
+      pollRef.current.add(poll)
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught))
     }

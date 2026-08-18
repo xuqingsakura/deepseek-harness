@@ -138,8 +138,15 @@ const bridge: DesktopBridge = {
     onOpen: () => void,
     onEnd: () => void,
   ): (() => void) => {
-    const frameListener = (_event: IpcRendererEvent, source: string, envelope: unknown): void => {
-      if (source === channel) onFrame(envelope)
+    const frameListener = (_event: IpcRendererEvent, source: string, envelopes: unknown): void => {
+      if (source !== channel) return
+      // The main process coalesces bursts into one message carrying an array;
+      // a single frame arrives unwrapped (kept for older/plain senders).
+      if (Array.isArray(envelopes)) {
+        for (const envelope of envelopes) onFrame(envelope)
+      } else {
+        onFrame(envelopes)
+      }
     }
     const openListener = (_event: IpcRendererEvent, source: string): void => {
       if (source === channel) onOpen()

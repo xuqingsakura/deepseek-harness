@@ -34,3 +34,28 @@
   /* Optical align with 28px icon hit targets that pad 6px past the glyph. */
   margin-left: -6px;
 }
+
+/* Folded-head control for very long replies: quiet divider row with an
+   expand action; keeps the settled head out of the layout while the tail
+   streams (figma 16/28 rhythm). */
+.foldHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.foldExpand {
+  color: var(--dsw-static-deepseek-500);
+  font-weight: 600;
+  white-space: nowrap;
+}

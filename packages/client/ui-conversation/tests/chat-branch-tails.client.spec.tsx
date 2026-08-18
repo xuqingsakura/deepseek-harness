@@ -947,6 +947,29 @@ describe('useCalendarDay boundary refresh', () => {
 })
 
 describe('small branch tails', () => {
+  it('AssistantMarkdown folds a very long reply head behind an expand control', () => {
+    const blocks = Array.from({ length: 200 }, (_, index) => ({ kind: 'text' as const, text: `block-${index}` }))
+    const view = render(<AssistantMarkdown t={t} blocks={blocks} streaming={false} />)
+    // Tail window only: the folded head is gone, the live tail is present.
+    expect(view.queryByText('block-0')).toBeNull()
+    expect(view.getByText('block-199')).toBeTruthy()
+    expect(view.getByText('已折叠前 140 段内容')).toBeTruthy()
+    expect(view.container.querySelectorAll('[data-testid="folded-head"]')).toHaveLength(0)
+    // Expanding restores the exact full content and removes the control.
+    fireEvent.click(view.getByText('展开'))
+    expect(view.getByText('block-0')).toBeTruthy()
+    expect(view.queryByText('已折叠前 140 段内容')).toBeNull()
+  })
+
+  it('AssistantMarkdown leaves short replies and growing streams unfolded', () => {
+    const short = render(<AssistantMarkdown t={t} blocks={[{ kind: 'text', text: 'short' }]} streaming={false} />)
+    expect(short.getByText('short')).toBeTruthy()
+    expect(short.queryByText('展开')).toBeNull()
+    const streaming = render(<AssistantMarkdown t={t} blocks={[{ kind: 'text', text: 'live' }]} streaming />)
+    expect(streaming.getByText('live')).toBeTruthy()
+    expect(streaming.queryByText('展开')).toBeNull()
+  })
+
   it('AssistantMarkdown single-line reasoning summary skips the newline cut', () => {
     const view = render(
       <AssistantMarkdown t={t} blocks={[{ kind: 'reasoning', text: 'one-liner' }]} streaming={false} />,

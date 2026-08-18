@@ -42,6 +42,10 @@ afterEach(() => {
 // so one harness's selection cannot rehydrate into the next.
 beforeEach(() => {
   localStorage.clear()
+  // Scroll handling coalesces on requestAnimationFrame; run it synchronously
+  // so readerScroll assertions observe the same frame the event fired on.
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callback(0); return 1 })
+  vi.stubGlobal('cancelAnimationFrame', () => {})
 })
 
 const SID = 's1' as SessionId
