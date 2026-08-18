@@ -10,7 +10,10 @@
  * @module @deepseek-ai/dsh-desktop/deploy-runtime
  */
 
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync, cpSync, existsSync, lstatSync, mkdirSync,
+  readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync,
+} from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -420,3 +423,35 @@ function restoreOpencodeDeps() {
 restoreOpencodeDeps()
 
 trimPiAiProviders()
+
+/** Replace closure symlinks/junctions with real directories so the packaged
+ * payload is self-contained: a junction points at the dev-machine workspace
+ * path, which breaks both the NSIS 7z pass on CI ("cannot find the path") and
+ * the installed app (the target does not exist there). pnpm's link: overrides
+ * (cosmokit, schemastery) are the usual offenders. */
+function materializeClosureLinks() {
+  const modulesRoot = resolve(APP_ROOT, 'out', 'runtime', 'host-deploy', 'node_modules')
+  const scoped = join(modulesRoot, '@deepseek-ai')
+  if (!existsSync(scoped)) return
+  let materialized = 0
+  for (const name of readdirSync(scoped)) {
+    const entry = join(scoped, name)
+    let stat
+    try {
+      stat = lstatSync(entry)
+    } catch {
+      continue
+    }
+    if (!stat.isSymbolicLink()) continue
+    const target = realpathSync(entry)
+    rmSync(entry, { recursive: true, force: true })
+    copyDir(target, entry)
+    materialized += 1
+    console.log(`deploy-runtime: materialized link @deepseek-ai/${name} <- ${target}`)
+  }
+  if (materialized > 0) {
+    console.log(`deploy-runtime: materialized ${materialized} closure link(s)`)
+  }
+}
+
+materializeClosureLinks()
