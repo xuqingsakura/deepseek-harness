@@ -88,6 +88,15 @@ jobs:
       - name: Build host libraries
         run: pnpm run build:lib:host
 
+      - name: Ensure Electron binary
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'apps/desktop/node_modules/electron/dist/electron.exe')) {
+            node apps/desktop/node_modules/electron/install.js
+          }
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
       - name: Package desktop installer (NSIS)
         run: pnpm run package:desktop
         env:

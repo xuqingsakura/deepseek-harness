@@ -1,9 +1,10 @@
 appId: com.deepseek-ai.dsh-desktop
 productName: DeepSeek Harness
 directories:
+  # Overridden by package:desktop via DSH_PKG_OUTPUT_DIR on CI (this local
+  # default keeps bare electron-builder runs working on the dev machine).
   output: C:/Users/苏铭/AppData/Local/Temp/dsh-pkg
   buildResources: build
-electronDist: D:/deepseek-harness/apps/desktop/node_modules/electron/dist
 files:
   - lib/**/*
   - assets/**/*
