@@ -39,6 +39,36 @@ if (!existsSync(CLI_LIB)) {
   process.exit(1)
 }
 
+/** Ensure the vendored pnpm executable (runtime/pnpm/pnpm.exe) exists; a clean
+ * tree (CI) has none and electron-builder ships it as resources/pnpm for the
+ * plugin installer. The official standalone zip is downloaded (version from the
+ * root packageManager field) and its pnpm.exe extracted. */
+function ensureVendoredPnpm() {
+  const exe = join(APP_ROOT, 'runtime', 'pnpm', 'pnpm.exe')
+  if (existsSync(exe)) return
+  const rootManifest = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+  const match = /^pnpm@(.+)$/.exec(rootManifest.packageManager ?? '')
+  if (match === null) {
+    throw new Error('package: cannot derive pnpm version from packageManager in package.json')
+  }
+  const version = match[1]
+  const zipUrl = `https://github.com/pnpm/pnpm/releases/download/v${version}/pnpm-win32-x64.zip`
+  const tmpDir = join(process.env.TEMP ?? APP_ROOT, 'dsh-vendored-pnpm')
+  const tmpZip = join(tmpDir, 'pnpm-win32-x64.zip')
+  const extractDir = join(tmpDir, 'extract')
+  rmSync(tmpDir, { recursive: true, force: true })
+  mkdirSync(extractDir, { recursive: true })
+  console.log(`package: downloading vendored pnpm v${version} (${zipUrl})`)
+  // curl follows the GitHub release redirect; tar (bsdtar) extracts the zip.
+  run('download pnpm standalone', 'curl.exe', ['-L', '--fail', '-o', tmpZip, zipUrl], APP_ROOT)
+  run('extract pnpm standalone', 'tar', ['-xf', tmpZip, '-C', extractDir], APP_ROOT)
+  mkdirSync(dirname(exe), { recursive: true })
+  copyFileSync(join(extractDir, 'pnpm.exe'), exe)
+  console.log('package: vendored pnpm ready at ' + exe)
+}
+
+ensureVendoredPnpm()
+
 // 1. Client bundles feed the web profile the shell boots in-process.
 run('build client libs', 'pnpm', ['run', 'build:lib:client'], REPO_ROOT)
 // 2. A clean tree (CI) has no deployed closure yet; materialize it with pnpm
