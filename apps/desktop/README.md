@@ -36,6 +36,12 @@ pnpm --filter @deepseek-ai/dsh-desktop run smoke
 
 To bring a web-version home (`~/.dsh`) over, Settings → About & Updates → **Import data from Web version** runs a safe merge (or run `node apps/desktop/scripts/migrate-web-data.mjs` from the repo after `pnpm --filter @deepseek-ai/dsh-desktop run build`). The migration copies only conversation sessions the target does not already own, merges `storages/*.json` key-by-key (target keys win), and leaves `settings.yaml` / `.credentials.yaml` untouched unless you opt in explicitly (and even then only when the target file is absent). An empty or missing `storages/workspace.json` makes the workspace registry re-bootstrap and adopt the copied sessions automatically. Use `--dry-run` to preview, `--force` to replace target-owned sessions, and `--json` for machine-readable output.
 
+## Launch splash
+
+While the harness host boots, the shell shows an animated launch page: the favicon whale swims in from the left, settles into a breathing loop with brand-blue ripple rings over a star field, and on host-ready the whale swims out right while the page fades to the dark base before the real UI loads. All motion is transform/opacity (GPU composited) and respects `prefers-reduced-motion`; the pre-animation splash remains available as a fallback via `DSH_DESKTOP_LEGACY_SPLASH=1`.
+
+Any installed web-profile plugin may supply its own splash by declaring `dsh.desktop.splash` in its package.json pointing at a self-contained HTML file (relative to the package root). The shell scans installed plugins at boot and uses the first valid declaration; broken or path-escaping declarations fall back silently to the built-in page. Splash HTML should implement `window.__dshSplashExit()` returning a Promise that resolves when its exit animation finishes, so the shell can transition smoothly to the UI; pages without it get a fixed 450ms fade.
+
 ## Development
 
 ```sh

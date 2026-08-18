@@ -36,6 +36,12 @@ pnpm --filter @deepseek-ai/dsh-desktop run smoke
 
 要迁移 web 版 home（`~/.dsh`），可在「设置 → 关于与更新 → 从 Web 版导入数据」中一键执行安全合并（或先执行 `pnpm --filter @deepseek-ai/dsh-desktop run build`，再运行仓库中的 `node apps/desktop/scripts/migrate-web-data.mjs`）。迁移只会复制目标尚不拥有的会话目录，按 key 合并 `storages/*.json`（目标已有 key 优先），且默认不碰 `settings.yaml` / `.credentials.yaml`，除非你显式勾选导入（且目标文件不存在时才会写入）。空的或缺失的 `storages/workspace.json` 会让工作区注册表重新引导并自动接管复制的会话。可用 `--dry-run` 预览、`--force` 覆盖目标已有会话、`--json` 输出机器可读报告。
 
+## 启动画面
+
+在 harness host 启动期间，桌面端会显示一个动画启动页：favicon 小鲸鱼从左侧游入，落位后进入呼吸循环并伴随品牌蓝涟漪圆环与星点背景；host 就绪后鲸鱼向右游出，页面淡出到深色底，再加载真实界面。所有动效均为 transform/opacity（GPU 合成），并尊重系统的「减少动态效果」设置；旧版静态启动页仍可通过 `DSH_DESKTOP_LEGACY_SPLASH=1` 作为备用启用。
+
+任何已安装的 web profile 插件都可以在 package.json 中声明 `dsh.desktop.splash`（指向包根目录下相对路径的自包含 HTML 文件）来提供自己的启动画面。启动时桌面端会扫描已安装插件并使用第一个合法声明；损坏或路径越界的声明会静默回退到内置页面。启动页 HTML 应实现 `window.__dshSplashExit()`（返回一个在其退出动画结束时 resolve 的 Promise），以便桌面端平滑过渡到主界面；未实现的页面会获得固定 450ms 的淡出。
+
 ## 开发
 
 ```sh

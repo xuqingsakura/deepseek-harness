@@ -45,6 +45,7 @@ import {
 } from './plugin-manager.ts'
 import { migrateWebData, type MigrateOptions } from './migrate-web-data.ts'
 import { fileURLToPath } from 'node:url'
+import { errorSplashDataUrl, splashDataUrl } from './splash.ts'
 
 /** apps/desktop — one level up from src/ and lib/ (same relative hop from either artifact). */
 const APP_ROOT = fileURLToPath(new URL('../', import.meta.url))
@@ -120,31 +121,7 @@ const HOST_URL_RE = /dsh web: (https?:\/\/\S+)/
 /** Smoke-mode render wait: how long to poll the React root before failing. */
 const SMOKE_TIMEOUT_MS = 20_000
 
-/** Inline splash shown while the host boots, so the window appears instantly. */
-const SPLASH_HTML = [
-  '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>',
-  'html,body{height:100%;margin:0;background:#0d1117;color:#eef0f3;font-family:system-ui,"Segoe UI","Microsoft YaHei",sans-serif;display:flex;align-items:center;justify-content:center;}',
-  '.wrap{text-align:center;}',
-  '.spinner{width:24px;height:24px;border:3px solid rgb(238 240 243 / .25);border-top-color:#eef0f3;border-radius:50%;margin:0 auto 18px;animation:spin 1s linear infinite;}',
-  '@keyframes spin{to{transform:rotate(360deg);}}',
-  '.name{font-size:18px;font-weight:600;letter-spacing:.02em;}',
-  '.hint{font-size:12px;color:rgb(238 240 243 / .55);margin-top:8px;}',
-  '</style></head><body><div class="wrap"><div class="spinner"></div><div class="name">DeepSeek Harness</div><div class="hint">正在启动…</div></div></body></html>',
-].join('')
-const SPLASH_DATA_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(SPLASH_HTML)
 
-/** Escape text for embedding in the inline splash HTML. */
-function escapeHtml(text: string): string {
-  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-}
-
-/** Splash variant reporting a host boot failure; URL-encoded for loadURL. */
-function errorSplashDataUrl(error: unknown): string {
-  const detail = String(error instanceof Error ? error.message : error).slice(0, 800)
-  const html = SPLASH_HTML
-    .replace('<div class="hint">正在启动…</div>', '<div class="hint">启动失败：<br>' + escapeHtml(detail) + '</div>')
-  return 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
-}
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -281,6 +258,21 @@ async function waitForRender(window: BrowserWindow, timeoutMs: number): Promise<
   return 0
 }
 
+/** Play the splash exit animation (whale out + fade), so navigating to the real UI lands on a smooth dark transition. */
+async function playSplashExit(window: BrowserWindow): Promise<void> {
+  if (window.isDestroyed()) return
+  try {
+    const result: unknown = await window.webContents.executeJavaScript(
+      'window.__dshSplashExit ? window.__dshSplashExit() : null',
+    )
+    // Legacy/plugin splash pages without the exit function get a fixed fade.
+    if (result === null) await new Promise(resolve => setTimeout(resolve, 450))
+  } catch {
+    // Page not executable (destroyed / mid-navigation): fixed fade, never block the UI.
+    await new Promise(resolve => setTimeout(resolve, 450))
+  }
+}
+
 /** Create the main window over the host URL. */
 function createMainWindow(url: string | undefined, onClosed: () => void): BrowserWindow {
   const saved = loadWindowState()
@@ -393,7 +385,7 @@ function createMainWindow(url: string | undefined, onClosed: () => void): Browse
     void window.loadURL(url)
   } else {
     // Host still booting: paint the splash so the launch feels immediate.
-    void window.loadURL(SPLASH_DATA_URL)
+    void window.loadURL(splashDataUrl(harnessHome()))
   }
   return window
 }
@@ -1118,7 +1110,10 @@ if (GEN_ICON_DIR !== undefined) {
         hostBaseUrl = url
         debugLog(`host ready at ${url}`)
         console.log(`[dsh-desktop] host ready at ${url}`)
-        if (!window.isDestroyed()) void window.loadURL(url)
+        if (!window.isDestroyed()) {
+          await playSplashExit(window)
+          if (!window.isDestroyed()) void window.loadURL(url)
+        }
         if (!SMOKE) {
           tray = createTray(() => window)
           console.log('[dsh-desktop] tray created')
