@@ -133,6 +133,10 @@ export interface LocalDirEntry {
   target: LocalTarget
   version?: FsVersion
   size?: number
+  /** Whether the child is a symbolic link (its type describes the target). */
+  isSymlink?: boolean
+  /** For a symlink: the target is missing or unreadable (probe failed). */
+  broken?: boolean
 }
 
 /**
@@ -304,6 +308,9 @@ export async function listDirectory(target: LocalTarget, signal?: AbortSignal): 
     throwIfAborted(signal, 'list')
     try {
       const childTarget = await resolveListedChildTarget(target, entry.name)
+      // stat (via probe) follows the chain, so 	ype describes the link's
+      // target; a missing target leaves childInfo undefined and marks the row
+      // broken. Dirent.isSymbolicLink() reports the link itself.
       const childInfo = await probe(childTarget.targetKey)
       result.push({
         name: entry.name,
@@ -311,6 +318,7 @@ export async function listDirectory(target: LocalTarget, signal?: AbortSignal): 
         target: childTarget,
         ...(childInfo ? { version: childInfo.version } : {}),
         ...(childInfo?.type === 'file' ? { size: childInfo.size } : {}),
+        ...(entry.isSymbolicLink() ? { isSymlink: true, broken: childInfo === undefined } : {}),
       })
     } catch (error: unknown) {
       throw listingIoError(join(target.displayPath, entry.name), error)

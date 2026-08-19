@@ -28,7 +28,7 @@ type RemoteResult<T> =
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
 
 const CWD = { path: 'C:\\work' }
-const LIST = [{ name: 'a.txt', type: 'file' as const, size: 5 }]
+const LIST = [{ name: 'a.txt', type: 'file' as const, size: 5, hidden: false, isSymlink: false, broken: false }]
 const READ: WorkbenchReadResult = {
   content: 'hello', truncated: false, binary: false, size: 5,
   version: 'v1' as WorkbenchReadResult['version'],
@@ -46,8 +46,8 @@ async function bench() {
   }
   new RemoteService(ctx)
   const cwd = vi.fn<(sessionId: string) => Promise<RemoteResult<typeof CWD>>>().mockResolvedValue({ ok: true, value: CWD })
-  const listDir = vi.fn<(sessionId: string, path: string) => Promise<RemoteResult<typeof LIST>>>()
-    .mockResolvedValue({ ok: true, value: LIST })
+  const listDir = vi.fn<(sessionId: string, path: string) => Promise<RemoteResult<{ entries: typeof LIST; truncated: boolean }>>>()
+    .mockResolvedValue({ ok: true, value: { entries: LIST, truncated: false } })
   const readText = vi.fn<(sessionId: string, path: string) => Promise<RemoteResult<typeof READ>>>()
     .mockResolvedValue({ ok: true, value: READ })
   const writeText = vi.fn<
@@ -85,8 +85,10 @@ async function bench() {
     .mockResolvedValue({ ok: true, value: undefined })
   const gitCheckout = vi.fn<(sessionId: string, branch: string) => Promise<RemoteResult<undefined>>>()
     .mockResolvedValue({ ok: true, value: undefined })
+  const searchFiles = vi.fn<(sessionId: string, query: string) => Promise<RemoteResult<{ matches: string[]; truncated: boolean }>>>()
+    .mockResolvedValue({ ok: true, value: { matches: [], truncated: false } })
   ctx.provide('remote.workbench', {
-    cwd, listDir, readText, writeText,
+    cwd, listDir, readText, writeText, searchFiles,
     terminalSpawn, terminalWrite, terminalRead, terminalClose, terminalCloseSession,
     gitStatus, gitDiff, gitLog, gitBranches, gitAdd, gitRestore, gitCommit, gitCheckout,
   })
@@ -110,7 +112,7 @@ async function bench() {
   }
   ctx.provide('sessions', { list: sessionsList })
   return {
-    ctx, slots: ctx.get('slots') as SlotRegistry, locale, cwd, listDir, readText, writeText,
+    ctx, slots: ctx.get('slots') as SlotRegistry, locale, cwd, listDir, readText, writeText, searchFiles,
     terminalSpawn, terminalWrite, terminalRead, terminalClose, terminalCloseSession,
     gitStatus, gitDiff, gitLog, gitBranches, gitAdd, gitRestore, gitCommit, gitCheckout,
     openWorkbench, closeWorkbench, sessionsList, currentSession,
@@ -138,6 +140,10 @@ function treePanelProps(
   return {
     workbench,
     t,
+    searchFiles: async (_sessionId: string, _query: string) => ({
+      matches: [], truncated: false,
+    }),
+    referenceFile: () => {},
     cwd: async (sessionId: string) => {
       const r = await b.cwd(sessionId)
       if (!r.ok) throw new Error(r.error.message)

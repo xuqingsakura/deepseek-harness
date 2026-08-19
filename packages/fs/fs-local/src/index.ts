@@ -160,6 +160,8 @@ export class LocalFileSystem extends FileSystem {
       target: { targetKey: entry.target.targetKey, displayPath: entry.target.displayPath },
       ...(entry.version !== undefined ? { version: entry.version } : {}),
       ...(entry.size !== undefined ? { size: entry.size } : {}),
+      ...(entry.isSymlink !== undefined ? { isSymlink: entry.isSymlink } : {}),
+      ...(entry.broken !== undefined ? { broken: entry.broken } : {}),
     }))
   }
 

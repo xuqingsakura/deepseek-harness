@@ -167,10 +167,10 @@ describe('AppFrame', () => {
     expect(columnAt(2).querySelector('[data-testid="details-content"]')).toBeTruthy()
 
     act(() => { instance.actions.openWorkbench() })
-    // Tree column 300 + conversation column 480; the frame template keeps the
+    // Default equal 1:1:1 split (1920/3 = 640); the frame template keeps the
     // three-track shape (sidebar | center | details).
     expect(frame.hasAttribute('data-workbench')).toBe(true)
-    expect(tracks(frame)).toEqual([300, 480])
+    expect(tracks(frame)).toEqual([640, 640])
     // The conversation stays in the center column node (moved to the right
     // track via CSS), and the viewer fills the details column node (moved to
     // the center track) — never the other way around.
@@ -193,23 +193,25 @@ describe('AppFrame', () => {
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.openWorkbench() })
     expect(frame.hasAttribute('data-workbench')).toBe(true)
-    expect(tracks(frame)).toEqual([300, 480])
+    expect(tracks(frame)).toEqual([640, 640])
   })
 
   it('workbench view drags both handles: tree width and conversation width', () => {
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.openWorkbench() })
-    expect(tracks(frame)).toEqual([300, 480])
+    // Default equal 1:1:1; the handles sit at the 1/3 and 2/3 edges.
+    expect(tracks(frame)).toEqual([640, 640])
     const handles = frame.querySelectorAll('[class*="handle"]')
     expect(handles).toHaveLength(2)
 
-    // The sidebar handle resizes the file-tree column.
-    drag(handles[0]!, 300, 360)
-    expect(instance.getSnapshot().sidebar).toBe(360)
+    // Dragging the sidebar handle exits the equal split into pixels.
+    drag(handles[0]!, 640, 700)
+    expect(instance.getSnapshot().sidebar).toBe(700)
 
     // The details handle resizes the conversation column (dragging it left
-    // widens the conversation).
-    const detailsLeft = 1920 - 480
+    // widens the conversation); the split is pixel-based now, so the
+    // preference clamps to the contract ceiling.
+    const detailsLeft = 1920 - 520
     drag(handles[1]!, detailsLeft, detailsLeft - 40)
     expect(instance.getSnapshot().details).toBe(520)
   })

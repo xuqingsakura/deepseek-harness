@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CENTER_MIN, clampWidth, computeColumns,
-  DETAILS_DEFAULT, DETAILS_MIN, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN,
-  WORKBENCH_MINS,
+  CENTER_MIN, clampWidth, computeColumns, computeEqualColumns,
+  DETAILS_DEFAULT, DETAILS_MIN, EQUAL_SPLIT_MIN_VIEWPORT,
+  SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, SIDEBAR_MIN, WORKBENCH_MINS,
 } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 
 // Numeric preference form (0 = closed); helpers keep the scenario names readable.
@@ -102,5 +102,23 @@ describe('computeColumns — degenerate viewports', () => {
     // Reaches step 3's auto-close with the compact rail sidebar.
     expect(computeColumns(500, closed(300), open(DETAILS_DEFAULT)))
       .toEqual({ sidebar: SIDEBAR_COLLAPSED, center: 500 - SIDEBAR_COLLAPSED, details: 0 })
+  })
+})
+
+
+describe('computeEqualColumns', () => {
+  it('splits three columns evenly with the center absorbing the remainder', () => {
+    expect(computeEqualColumns(1920)).toEqual({ sidebar: 640, center: 640, details: 640 })
+    expect(computeEqualColumns(1440)).toEqual({ sidebar: 480, center: 480, details: 480 })
+    // Rounding remainder lands on the center column.
+    expect(computeEqualColumns(1000)).toEqual({ sidebar: 333, center: 334, details: 333 })
+  })
+
+  it('equal split only applies at or above the workbench floors (EQUAL_SPLIT_MIN_VIEWPORT)', () => {
+    expect(EQUAL_SPLIT_MIN_VIEWPORT).toBe(3 * Math.max(WORKBENCH_MINS.sidebarMin, WORKBENCH_MINS.centerMin, WORKBENCH_MINS.detailsMin))
+    const cols = computeEqualColumns(EQUAL_SPLIT_MIN_VIEWPORT)
+    expect(cols.sidebar).toBeGreaterThanOrEqual(WORKBENCH_MINS.sidebarMin)
+    expect(cols.center).toBeGreaterThanOrEqual(WORKBENCH_MINS.centerMin)
+    expect(cols.details).toBeGreaterThanOrEqual(WORKBENCH_MINS.detailsMin)
   })
 })

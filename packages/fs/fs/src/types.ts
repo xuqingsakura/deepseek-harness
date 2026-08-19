@@ -112,6 +112,10 @@ export interface FsDirEntry {
   version?: FsVersion
   /** Byte size of a regular file, when the backend can report it. */
   size?: number
+  /** Whether the child is a symbolic link (its type describes the target). */
+  isSymlink?: boolean
+  /** For a symlink: the target is missing or unreadable (stat failed). */
+  broken?: boolean
 }
 
 /**

@@ -229,6 +229,39 @@ export function WorkbenchGitPanel({
         <div className={css.empty}>{t('git.noRepo')}</div>
       ) : (
         <>
+          <div className={css.history}>
+            <div className={css.historyHeader}>{t('git.history')}</div>
+            {log.length === 0 ? (
+              <div className={css.hint}>{t('git.noCommits')}</div>
+            ) : (
+              <ul className={css.historyList}>
+                {graph.map(row => (
+                  <li key={row.commit.hash} className={css.graphRow} title={`${row.commit.hash}\n${row.commit.author} · ${row.commit.date}`}>
+                    <span className={css.graphCells} aria-hidden="true">
+                      {row.cells.map((cell, index) => (
+                        <span
+                          key={index}
+                          className={
+                            cell === 'empty'
+                              ? css.graphEmpty
+                              : cell === 'edge'
+                                ? css.graphEdge
+                                : css.graphNode
+                          }
+                        />
+                      ))}
+                    </span>
+                    <span className={css.graphHash}>{row.commit.shortHash}</span>
+                    <span className={css.graphMessage}>
+                      {row.commit.message}
+                      {row.merge ? <span className={css.graphMergeTag}>{t('git.merge')}</span> : null}
+                    </span>
+                    <span className={css.graphAuthor}>{row.commit.author}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div className={css.body}>
             <div className={css.listCol}>
               {groups === undefined ? (
@@ -299,39 +332,6 @@ export function WorkbenchGitPanel({
                 </>
               )}
             </div>
-          </div>
-          <div className={css.history}>
-            <div className={css.historyHeader}>{t('git.history')}</div>
-            {log.length === 0 ? (
-              <div className={css.hint}>{t('git.noCommits')}</div>
-            ) : (
-              <ul className={css.historyList}>
-                {graph.map(row => (
-                  <li key={row.commit.hash} className={css.graphRow} title={`${row.commit.hash}\n${row.commit.author} · ${row.commit.date}`}>
-                    <span className={css.graphCells} aria-hidden="true">
-                      {row.cells.map((cell, index) => (
-                        <span
-                          key={index}
-                          className={
-                            cell === 'empty'
-                              ? css.graphEmpty
-                              : cell === 'edge'
-                                ? css.graphEdge
-                                : css.graphNode
-                          }
-                        />
-                      ))}
-                    </span>
-                    <span className={css.graphHash}>{row.commit.shortHash}</span>
-                    <span className={css.graphMessage}>
-                      {row.commit.message}
-                      {row.merge ? <span className={css.graphMergeTag}>{t('git.merge')}</span> : null}
-                    </span>
-                    <span className={css.graphAuthor}>{row.commit.author}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
           <div className={css.bottom}>
             <input

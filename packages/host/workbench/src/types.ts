@@ -33,6 +33,28 @@ export interface WorkbenchDirEntry {
   type: 'file' | 'directory' | 'other'
   /** Byte size of a regular file, when the backend can report it. */
   size?: number
+  /** Dot-prefixed entry (rendered dimmed by the tree). */
+  hidden: boolean
+  /** Whether the child is a symbolic link (its type describes the target). */
+  isSymlink: boolean
+  /** For a symlink: the target is missing or unreadable (stat failed). */
+  broken: boolean
+}
+
+/** One listed level: the entries plus whether the row bound truncated them. */
+export interface WorkbenchDirListing {
+  /** The directory's children in display order. */
+  entries: WorkbenchDirEntry[]
+  /** True when more rows existed than the listing bound and were dropped. */
+  truncated: boolean
+}
+
+/** Result of a recursive file-name search. */
+export interface WorkbenchSearchResult {
+  /** Matching paths RELATIVE to the search root ('/'-separated). */
+  matches: string[]
+  /** True when a search budget cut the walk short. */
+  truncated: boolean
 }
 
 /** The session's authoritative working directory. */

@@ -53,6 +53,7 @@ describe('WorkbenchGateway registration', () => {
     expect(remoteMethods(gateway)).toEqual([
       { method: 'cwd', invocation: { kind: 'direct' } },
       { method: 'listDir', invocation: { kind: 'direct' } },
+      { method: 'searchFiles', invocation: { kind: 'direct' } },
       { method: 'readText', invocation: { kind: 'direct' } },
       { method: 'writeText', invocation: { kind: 'direct' } },
       { method: 'terminalSpawn', invocation: { kind: 'direct' } },
@@ -90,7 +91,7 @@ describe('listDir', () => {
     await writeFile(join(dir, 'a.txt'), 'a')
     await writeFile(join(dir, 'src', 'b.txt'), 'b')
 
-    const entries = await gateway.listDir('session-1', '')
+    const { entries } = await gateway.listDir('session-1', '')
     expect(entries.map(entry => entry.name).sort()).toEqual(['a.txt', 'src'])
     const src = entries.find(entry => entry.name === 'src')
     expect(src?.type).toBe('directory')
@@ -104,7 +105,7 @@ describe('listDir', () => {
       await mkdir(join(dir, 'deep'))
       await writeFile(join(dir, 'nested.txt'), 'x')
     })
-    const entries = await gateway.listDir('session-1', '.')
+    const { entries } = await gateway.listDir('session-1', '.')
     expect(entries.some(entry => entry.name === 'nested.txt')).toBe(true)
   })
 })
@@ -328,14 +329,14 @@ describe('git', () => {
 describe('filesystem operations', () => {
   it('creates a directory recursively', async () => {
     await gateway.fsMkdir('session-1', 'src/lib')
-    const entries = await gateway.listDir('session-1', 'src')
+    const { entries } = await gateway.listDir('session-1', 'src')
     expect(entries.some(entry => entry.name === 'lib' && entry.type === 'directory')).toBe(true)
   })
 
   it('renames a file or directory', async () => {
     await writeFile(join(dir, 'old.txt'), 'x', 'utf8')
     await gateway.fsRename('session-1', 'old.txt', 'new.txt')
-    const entries = await gateway.listDir('session-1', '')
+    const { entries } = await gateway.listDir('session-1', '')
     expect(entries.some(entry => entry.name === 'new.txt')).toBe(true)
     expect(entries.some(entry => entry.name === 'old.txt')).toBe(false)
   })
@@ -343,7 +344,7 @@ describe('filesystem operations', () => {
   it('removes a file', async () => {
     await writeFile(join(dir, 'gone.txt'), 'x', 'utf8')
     await gateway.fsRemove('session-1', 'gone.txt')
-    const entries = await gateway.listDir('session-1', '')
+    const { entries } = await gateway.listDir('session-1', '')
     expect(entries.some(entry => entry.name === 'gone.txt')).toBe(false)
   })
 
@@ -351,7 +352,7 @@ describe('filesystem operations', () => {
     await mkdir(join(dir, 'tree', 'deep'), { recursive: true })
     await writeFile(join(dir, 'tree', 'deep', 'a.txt'), 'x', 'utf8')
     await gateway.fsRemove('session-1', 'tree', true)
-    const entries = await gateway.listDir('session-1', '')
+    const { entries } = await gateway.listDir('session-1', '')
     expect(entries.some(entry => entry.name === 'tree')).toBe(false)
   })
 

@@ -10,8 +10,8 @@
  * @module @deepseek-ai/dsh-host-workbench
  */
 
-import { mkdir, rename, rm, stat, unlink } from 'node:fs/promises'
-import { resolve as resolvePath, sep as pathSep } from 'node:path'
+import { mkdir, opendir, rename, rm, stat, unlink } from 'node:fs/promises'
+import { join as joinPath, relative as relativePath, resolve as resolvePath, sep as pathSep } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { FsVersion, type FsDirEntry, type FsTarget, type FsWriteIntent } from '@deepseek-ai/dsh-fs'
 import { SessionId, type SessionStore } from '@deepseek-ai/dsh-session'
@@ -20,6 +20,7 @@ import {
   WorkbenchVersion,
   type WorkbenchCwdResult,
   type WorkbenchDirEntry,
+  type WorkbenchDirListing,
   type WorkbenchReadResult,
   type WorkbenchWriteResult,
   type WorkbenchTerminalSpawnResult,
@@ -28,6 +29,7 @@ import {
   type WorkbenchGitLogEntry,
   type WorkbenchGitDiffResult,
   type WorkbenchGitBranch,
+  type WorkbenchSearchResult,
 } from './types.ts'
 import { WorkbenchTerminalHost } from './terminal.ts'
 import {
@@ -48,6 +50,7 @@ export {
   WorkbenchVersion,
   type WorkbenchCwdResult,
   type WorkbenchDirEntry,
+  type WorkbenchDirListing,
   type WorkbenchReadResult,
   type WorkbenchWriteResult,
   type WorkbenchTerminalSession,
@@ -59,6 +62,7 @@ export {
   type WorkbenchGitLogEntry,
   type WorkbenchGitDiffResult,
   type WorkbenchGitBranch,
+  type WorkbenchSearchResult,
 } from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -71,6 +75,14 @@ declare module '@deepseek-ai/cordis' {
 const TEXT_READ_LIMIT_BYTES = 1 * 1024 * 1024
 /** NUL-probe window for binary detection, matching the tool layer's sniffing. */
 const BINARY_PROBE_BYTES = 4096
+/** Row bound of one directory listing; extra rows flag the listing as
+ *  truncated (the tree virtualizes rendering, but a 100k-entry level would
+ *  still stall the wire). */
+const LIST_ENTRY_MAX = 1000
+/** Row cap of one file-name search result list. */
+const SEARCH_MATCH_MAX = 200
+/** Total entries visited before a search gives up. */
+const SEARCH_VISIT_MAX = 100_000
 
 /**
  * Resolve a session's authoritative working directory. The session header
@@ -92,10 +104,59 @@ function projectDirEntry(entry: FsDirEntry): WorkbenchDirEntry {
     name: entry.name,
     type: entry.type,
     ...(entry.size === undefined ? {} : { size: entry.size }),
+    hidden: entry.name.startsWith('.'),
+    isSymlink: entry.isSymlink === true,
+    broken: entry.broken === true,
   }
 }
 
 /** Remote-only service exposing the session-scoped workbench file face. */
+/**
+ * Recursive file-name search over a local root. `.git` is VCS noise (never
+ * matched or descended) and symlinked directories are NOT descended (cycle
+ * safety). An unreadable level is skipped — a permission error never fails
+ * the whole search. Budgets stop the walk early with `truncated: true`.
+ * @param root - absolute search root.
+ * @param query - the name substring (case-insensitive).
+ * @param signal - aborts the walk between levels.
+ * @returns relative matches ('/'-separated) plus the truncation flag.
+ */
+async function searchFileNames(root: string, query: string, signal?: AbortSignal): Promise<WorkbenchSearchResult> {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return { matches: [], truncated: false }
+  const matches: string[] = []
+  let visited = 0
+  let truncated = false
+
+  const walk = async (dir: string): Promise<void> => {
+    if (truncated) return
+    const level = await opendir(dir).catch(() => undefined)
+    if (level === undefined) return
+    for await (const dirent of level) {
+      if (signal?.aborted === true) return
+      visited += 1
+      if (visited > SEARCH_VISIT_MAX) {
+        truncated = true
+        return
+      }
+      if (dirent.isDirectory() && dirent.name === '.git') continue
+      if (dirent.name.toLowerCase().includes(needle)) {
+        matches.push(joinPath(relativePath(root, dir), dirent.name))
+        if (matches.length >= SEARCH_MATCH_MAX) {
+          truncated = true
+          return
+        }
+      }
+      if (dirent.isDirectory() && !dirent.isSymbolicLink()) {
+        await walk(joinPath(dir, dirent.name))
+        if (truncated) return
+      }
+    }
+  }
+  await walk(root)
+  return { matches: matches.sort().map(path => path.split(pathSep).join('/')), truncated }
+}
+
 export class WorkbenchGateway extends TypertRemoteService {
   static inject = ['fs', 'sessions']
 
@@ -141,10 +202,30 @@ export class WorkbenchGateway extends TypertRemoteService {
    * @returns the directory's children in backend order.
    */
   @Remote('listDir')
-  async listDir(sessionId: string, path: string, signal?: AbortSignal): Promise<WorkbenchDirEntry[]> {
+  async listDir(sessionId: string, path: string, signal?: AbortSignal): Promise<WorkbenchDirListing> {
     const target = await this.resolveIn(sessionId, path, signal)
     const entries = await this.ctx.fs.listDir(target, signal)
-    return entries.map(projectDirEntry)
+    return {
+      entries: entries.slice(0, LIST_ENTRY_MAX).map(projectDirEntry),
+      truncated: entries.length > LIST_ENTRY_MAX,
+    }
+  }
+
+  /**
+   * Recursive file-name search rooted at the session cwd. Streams with
+   * opendir and matches the query as a case-insensitive substring of each
+   * entry's name; paths return RELATIVE to the root ('/'-separated) so the
+   * client resolves them against the cwd. Budgets bound the walk so a runaway
+   * tree (a home root, a node_modules forest) cannot stall the host.
+   * @param sessionId - the conversation scope.
+   * @param query - the name substring (empty matches nothing).
+   * @param signal - aborts the walk.
+   * @returns matching relative paths plus whether a budget cut it short.
+   */
+  @Remote('searchFiles')
+  async searchFiles(sessionId: string, query: string, signal?: AbortSignal): Promise<WorkbenchSearchResult> {
+    const root = sessionCwdOf(this.ctx.sessions, sessionId)
+    return searchFileNames(root, query, signal)
   }
 
   /**

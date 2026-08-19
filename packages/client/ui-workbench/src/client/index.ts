@@ -50,6 +50,30 @@ function remoteFailure(method: string, error: { code: string; message: string })
 }
 
 /**
+ * Append `@<relative path>` to a session's composer draft through the
+ * conversation service (the same lazy `ctx.get` read the app's own plugins
+ * use). A missing service or session scope degrades to a logged no-op.
+ * @param ctx - client root context.
+ * @param sessionId - the conversation whose composer receives the reference.
+ * @param relPath - the relative path to append.
+ */
+function referenceInDraft(ctx: ClientContext, sessionId: string, relPath: string): void {
+  try {
+    const scope = ctx.sessions.scope(sessionId as never)
+    if (scope === undefined) return
+    const conversation = ctx.get('conversation') as {
+      input: { for: (actx: unknown) => { state: { getSnapshot: () => { draft: string } }; setDraft: (text: string) => void } }
+    } | undefined
+    if (conversation === undefined) return
+    const input = conversation.input.for(scope)
+    const draft = input.state.getSnapshot().draft
+    input.setDraft(draft.trim() === '' ? `@${relPath}` : `${draft} @${relPath}`)
+  } catch (error) {
+    console.warn('[ui-workbench] draft reference failed:', error)
+  }
+}
+
+/**
  * Client plugin body: register the dictionaries, the header toggle, the
  * file-tree panel, and the center-column viewer over one shared workbench
  * state handle.
@@ -70,6 +94,12 @@ export function apply(ctx: ClientContext): void {
       if (!result.ok) throw remoteFailure('listDir', result.error)
       return result.value
     },
+    searchFiles: async (sessionId, query) => {
+      const result = await ctx.remote.workbench.searchFiles(sessionId, query)
+      if (!result.ok) throw remoteFailure('searchFiles', result.error)
+      return result.value
+    },
+    referenceFile: (sessionId, relPath) => { referenceInDraft(ctx, sessionId, relPath) },
     terminalSpawn: async (sessionId) => {
       const result = await ctx.remote.workbench.terminalSpawn(sessionId, undefined)
       if (!result.ok) throw remoteFailure('terminalSpawn', result.error)

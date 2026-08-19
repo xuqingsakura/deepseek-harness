@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT, WORKBENCH_MINS } from './columns.ts'
+import { computeColumns, computeEqualColumns, EQUAL_SPLIT_MIN_VIEWPORT, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT, WORKBENCH_MINS } from './columns.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -204,13 +204,20 @@ export function AppFrame({
     ? panels.details
     : (detailsSession === undefined ? 0 : panels.details)
   // Workbench columns concede below the conversation frame (file tree and
-  // viewer shrink; the conversation column survives narrow viewports).
-  const cols = computeColumns(
-    viewport,
-    sidebarPreference,
-    detailsWidth,
-    panels.sidebarView === 'workbench' ? WORKBENCH_MINS : undefined,
-  )
+  // viewer shrink; the conversation column survives narrow viewports). The
+  // workbench view defaults to an equal 1:1:1 split until the user drags a
+  // handle or toggles a panel (stores.ts workbenchEqual); below the equal-split
+  // floor it falls back to the pixel concession chain.
+  const workbenchView = panels.sidebarView === 'workbench'
+  const equalSplit = workbenchView && panels.workbenchEqual && viewport >= EQUAL_SPLIT_MIN_VIEWPORT
+  const cols = equalSplit
+    ? computeEqualColumns(viewport)
+    : computeColumns(
+      viewport,
+      sidebarPreference,
+      detailsWidth,
+      workbenchView ? WORKBENCH_MINS : undefined,
+    )
   const colsRef = useRef(cols)
   colsRef.current = cols
 

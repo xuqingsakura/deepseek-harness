@@ -58,11 +58,27 @@ export const DEFAULT_MINS: ColumnMins = {
   detailsMin: DETAILS_MIN,
 }
 
+
 /** Workbench-frame floors: the file tree and viewer concede, the conversation column survives narrow viewports. */
 export const WORKBENCH_MINS: ColumnMins = {
   sidebarMin: 200,
   centerMin: 300,
   detailsMin: 320,
+}
+
+/** Minimum viewport width for the equal workbench split (each of the three columns then holds its largest workbench floor). */
+export const EQUAL_SPLIT_MIN_VIEWPORT = 3 * Math.max(WORKBENCH_MINS.sidebarMin, WORKBENCH_MINS.centerMin, WORKBENCH_MINS.detailsMin)
+
+/**
+ * Equal split for the workbench view: three columns at one third each, the
+ * center absorbing the rounding remainder. Used only while the user has not
+ * dragged a handle (stores.ts workbenchEqual); any drag exits to pixels.
+ * @param viewport - available frame width in px.
+ * @returns the equal columns.
+ */
+export function computeEqualColumns(viewport: number): Columns {
+  const third = Math.floor(viewport / 3)
+  return { sidebar: third, center: viewport - third * 2, details: third }
 }
 
 /**

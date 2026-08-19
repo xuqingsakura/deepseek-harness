@@ -281,10 +281,10 @@
 
 .history {
   flex: none;
-  height: 132px;
+  height: 128px;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .historyHeader {

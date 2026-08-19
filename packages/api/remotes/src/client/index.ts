@@ -12,8 +12,8 @@ import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 export type { TypertClientRemote as ClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 export type { PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 export type {
-  WorkbenchCwdResult, WorkbenchDirEntry, WorkbenchReadResult, WorkbenchWriteResult,
-  WorkbenchTerminalSession, WorkbenchTerminalSpawnResult, WorkbenchTerminalReadResult,
+  WorkbenchCwdResult, WorkbenchDirEntry, WorkbenchDirListing, WorkbenchReadResult, WorkbenchWriteResult,
+  WorkbenchSearchResult, WorkbenchTerminalSession, WorkbenchTerminalSpawnResult, WorkbenchTerminalReadResult,
   WorkbenchGitChange, WorkbenchGitChangeKind, WorkbenchGitStatusResult,
   WorkbenchGitLogEntry, WorkbenchGitDiffResult, WorkbenchGitBranch,
 } from '@deepseek-ai/dsh-host-workbench/types'

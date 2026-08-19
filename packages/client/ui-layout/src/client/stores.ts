@@ -27,7 +27,7 @@ const WORKBENCH_DETAILS_WIDTH = 480
  * `narrowExpanded` is the manual override that re-expands the auto-collapsed
  * sidebar over the squeezed center without rewriting the width preference.
  */
-type LayoutState = { sidebar: number; details: number; bottom: number; sidebarView: 'default' | 'workbench'; narrow: boolean; narrowExpanded: boolean }
+type LayoutState = { sidebar: number; details: number; bottom: number; sidebarView: 'default' | 'workbench'; narrow: boolean; narrowExpanded: boolean; workbenchEqual: boolean }
 
 /**
  * Annotation twin of the actions literal below (the export needs a declared
@@ -60,10 +60,10 @@ type LayoutActions = {
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, bottom: 0, sidebarView: 'default', narrow: false, narrowExpanded: false }),
+    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, bottom: 0, sidebarView: 'default', narrow: false, narrowExpanded: false, workbenchEqual: false }),
     actions: {
-      setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
-      setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
+      setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX); d.workbenchEqual = false },
+      setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX); d.workbenchEqual = false },
       setBottom: (d, px: number) => { d.bottom = clampWidth(px, BOTTOM_MIN, BOTTOM_MAX) },
       // VSCode terminal-panel semantics: toggle between the default height and closed.
       toggleBottom: (d) => { d.bottom = d.bottom === 0 ? BOTTOM_DEFAULT : 0 },
@@ -77,6 +77,7 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
           // tree is narrower than the workspace browser).
           const width = d.sidebarView === 'workbench' ? WORKBENCH_SIDEBAR_WIDTH : SIDEBAR_DEFAULT
           d.sidebar = d.sidebar === 0 ? width : 0
+          if (d.sidebarView === 'workbench') d.workbenchEqual = false
         }
       },
       // Crossing the breakpoint in either direction drops the override: the
@@ -95,11 +96,13 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         d.sidebarView = 'workbench'
         d.sidebar = WORKBENCH_SIDEBAR_WIDTH
         d.details = WORKBENCH_DETAILS_WIDTH
+        d.workbenchEqual = true
       },
       closeWorkbench: (d) => {
         d.sidebarView = 'default'
         d.sidebar = SIDEBAR_DEFAULT
         d.details = 0
+        d.workbenchEqual = false
       },
       // VSCode activity-bar semantics: clicking the active view's icon
       // toggles the panel closed; clicking another view switches and opens it.
@@ -109,6 +112,7 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         if (d.sidebarView === view) {
           if (view === 'workbench') {
             d.sidebar = d.sidebar === 0 ? WORKBENCH_SIDEBAR_WIDTH : 0
+            d.workbenchEqual = false
           } else {
             d.sidebar = d.sidebar === 0 ? SIDEBAR_DEFAULT : 0
           }
@@ -116,10 +120,12 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
           d.sidebarView = 'workbench'
           d.sidebar = WORKBENCH_SIDEBAR_WIDTH
           d.details = WORKBENCH_DETAILS_WIDTH
+          d.workbenchEqual = true
         } else {
           d.sidebarView = 'default'
           d.sidebar = SIDEBAR_DEFAULT
           d.details = 0
+          d.workbenchEqual = false
         }
       },
     },
