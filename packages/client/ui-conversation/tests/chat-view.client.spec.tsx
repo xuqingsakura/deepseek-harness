@@ -1359,3 +1359,119 @@ describe('ChatView', () => {
     expect(failedView.container.querySelector('[data-state="error"]')).not.toBeNull()
   })
 })
+
+/** Activate windowing in jsdom: a working ResizeObserver makes ChatView treat
+ * the environment as a real browser for long flows. */
+function stubWindowing() {
+  class FakeResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+  vi.stubGlobal('ResizeObserverEntry', class ResizeObserverEntryStub {
+    readonly target = null
+    readonly contentRect = null
+  })
+}
+
+function rect(top: number, bottom: number): DOMRect {
+  return {
+    top, bottom, left: 0, right: 400, width: 400, height: bottom - top, x: 0, y: 0, toJSON: () => ({}),
+  } as DOMRect
+}
+
+describe('ChatView windowing loop', () => {
+  /** A controllable ResizeObserver: observe() collects targets, fire() invokes
+   * the callback once per collected target with a stable measured height. */
+  class LoopRO {
+    static instance: LoopRO | null = null
+    targets = new Set<Element>()
+    callback: ResizeObserverCallback
+    constructor(callback: ResizeObserverCallback) { this.callback = callback; LoopRO.instance = this }
+    observe(el: Element): void { this.targets.add(el) }
+    unobserve(el: Element): void { this.targets.delete(el) }
+    disconnect(): void { this.targets.clear() }
+    fire(height: number): void {
+      for (const target of this.targets) {
+        Object.defineProperty(target, 'offsetHeight', { configurable: true, value: height })
+        this.callback([{ target } as ResizeObserverEntry], this as unknown as ResizeObserver)
+      }
+    }
+  }
+
+  it('does not enter an update loop when wheel scrolling over a windowed flow', () => {
+    vi.stubGlobal('ResizeObserver', LoopRO)
+    vi.stubGlobal('ResizeObserverEntry', class ResizeObserverEntryStub {
+      readonly target = null
+      readonly contentRect = null
+    })
+    const nodes = Array.from({ length: 220 }, (_, i) => user(i + 1, 'm' + String(i + 1)))
+    const h = makeHarness({ nodes })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    installScrollMetrics(scroller, 220 * 84, 800)
+    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => rect(0, 800))
+    // Windowing engages on the first layout pass.
+    act(() => { readerScroll(scroller, 0) })
+    const firstCount = view.container.querySelectorAll('[data-chat-flow-key]').length
+    expect(firstCount).toBeLessThan(80)
+    // Fire measurement with a real row height (differs from the 84px estimate).
+    act(() => { LoopRO.instance?.fire(200) })
+    // Scroll away (wheel) and fire measurement again: the window moves, rows
+    // get measured once, and the refresh must settle (no update-depth crash).
+    act(() => { readerScroll(scroller, 40_000) })
+    act(() => { LoopRO.instance?.fire(200) })
+    act(() => { readerScroll(scroller, 80_000) })
+    act(() => { LoopRO.instance?.fire(200) })
+    expect(view.container.querySelectorAll('[data-chat-flow-key]').length).toBeLessThan(80)
+  })
+})
+
+describe('ChatView windowing', () => {
+  it('mounts a tail slice plus spacers instead of every node on a long flow', () => {
+    stubWindowing()
+    const nodes = Array.from({ length: 220 }, (_, i) => user(i + 1, 'message ' + String(i + 1)))
+    const h = makeHarness({ nodes })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    installScrollMetrics(scroller, 220 * 84, 800)
+    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => rect(0, 800))
+    // Reader scroll to the middle: the coalesced pass recomputes the window.
+    act(() => { readerScroll(scroller, 10_000) })
+    const mounted = [...view.container.querySelectorAll('[data-chat-flow-key]')]
+    expect(mounted.length).toBeGreaterThan(0)
+    expect(mounted.length).toBeLessThan(80)
+    expect(view.container.querySelectorAll('[class*="windowSpacer"]')).toHaveLength(2)
+    const keys = mounted.map(row => row.getAttribute('data-chat-flow-key'))
+    expect(keys).not.toContain('fixture:user:1')
+    expect(keys).toContain('fixture:user:120')
+  })
+
+  it('keeps the pinned tail window mounted as streaming appends rows', () => {
+    stubWindowing()
+    const base = Array.from({ length: 210 }, (_, i) => user(i + 1, 'm' + String(i + 1)))
+    const h = makeHarness({ nodes: base })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    installScrollMetrics(scroller, 210 * 84, 800)
+    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => rect(0, 800))
+    // Pin to the floor (reader scroll to max), then append a row.
+    act(() => { readerScroll(scroller, 210 * 84 - 800) })
+    act(() => { h.set({ nodes: [...base, user(211, 'streamed tail')] }) })
+    const keys = [...view.container.querySelectorAll('[data-chat-flow-key]')]
+      .map(row => row.getAttribute('data-chat-flow-key'))
+    expect(keys).toContain('fixture:user:211')
+  })
+
+  it('falls back to the full mount when the flow is short', () => {
+    stubWindowing()
+    const h = makeHarness({ nodes: [user(1, 'a'), user(2, 'b')] })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    installScrollMetrics(scroller, 168, 800)
+    act(() => { readerScroll(scroller, 0) })
+    expect(view.container.querySelectorAll('[class*="windowSpacer"]')).toHaveLength(0)
+    expect(view.container.querySelectorAll('[data-chat-flow-key]')).toHaveLength(2)
+  })
+})

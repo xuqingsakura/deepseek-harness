@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Windows desktop shell for the DeepSeek Harness Web GUI",
-  "version": "0.1.0-rc.54",
+  "version": "0.1.0-rc.56",
   "private": true,
   "type": "module",
   "main": "lib/main.js",

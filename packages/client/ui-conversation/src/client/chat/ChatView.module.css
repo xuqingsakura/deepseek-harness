@@ -62,6 +62,13 @@
   contain-intrinsic-size: auto 96px;
 }
 
+/* Windowing spacer: preserves scrollHeight for rows mounted out of the
+   window. A plain zero-intrinsic block; height comes from the inline style. */
+.windowSpacer {
+  flex: none;
+  min-height: 0;
+}
+
 /* A keyed renderer may intentionally decline its row after dispatch (the
    completed-turn tail does this when it owns neither actions nor extensions).
    An empty flex item must not consume the column gap. */
@@ -201,4 +208,13 @@
 
 .toBottom:hover {
   background: var(--dsw-alias-button-floating-hover);
+}
+
+/* Windowed flow (long sessions): mounted rows are already near the viewport,
+   so content-visibility would oscillate a row between its 96px placeholder
+   and its real height, feeding the measurement/refresh loop. Keep real
+   layout (high specificity beats the flowItem kind rules above). */
+.column[data-windowed] .flowItem[data-chat-flow-kind] {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
 }

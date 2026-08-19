@@ -77,6 +77,8 @@ export class Session implements SessionFace {
    *  a pre-disconnect open whose history request is already doomed. Stale doOpen
    *  passes drop all writes once the generation moves on. */
   private openGeneration = 0
+  /** Epoch ms of the last window open; drives resident-window pruning (manager). */
+  lastActiveAt = 0
   private loadingOlder = false
   private pending = new Map<string, PendingInteraction>()
   private pendingRev = 0
@@ -437,6 +439,36 @@ export class Session implements SessionFace {
     await this.open()
   }
 
+  /**
+   * Drop the resident window (manager pruning for long-running apps): the
+   * instance stays warm for bookkeeping (queue mirror, address, blank bit),
+   * but the event window and derived conversation state are released and the
+   * next open() re-fetches history. Never invoked on a selected or running
+   * session — the manager filters before calling.
+   */
+  /** Whether this session currently holds a resident event window. */
+  hasOpenWindow(): boolean {
+    return this.openState === 'open'
+  }
+
+  releaseWindow(): void {
+    if (this.openState === 'cold') return
+    this.openGeneration++
+    this.openPromise = null
+    this.openState = 'cold'
+    this.openError = null
+    this.events = []
+    this.views = []
+    this.baseSeq = 0
+    this.hasMore = false
+    this.pending.clear()
+    this.pendingRev++
+    this.pendingCache = null
+    this.subscribedLastSeq = null
+    this.liveBuffer = []
+    this.notifier.markDirty()
+  }
+
   // ---- Subscription API (useSyncExternalStore direct wiring) ----
 
   /**
@@ -632,6 +664,7 @@ export class Session implements SessionFace {
         if (result.ok) this.installWindow(result.value.events, result.value.hasMore, result.value.projections)
       }
       this.openState = 'open'
+      this.lastActiveAt = Date.now()
     } catch (error) {
       if (generation !== this.openGeneration) return
       this.openState = 'error'

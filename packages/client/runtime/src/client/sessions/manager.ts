@@ -20,6 +20,11 @@ import type { PendingInteractionStatus } from './pending.ts'
 import type {} from '@deepseek-ai/dsh-session-title/client'
 import { Notifier } from './notifier.ts'
 import { ProjectionValueStore } from './projection-store.ts'
+
+/** Resident-window cap: beyond this many concurrently open session windows the
+ *  manager releases the oldest non-selected, non-running ones (their instances
+ *  stay warm and re-fetch history on the next open). */
+const MAX_RESIDENT_WINDOWS = 20
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
 
@@ -198,6 +203,7 @@ export class SessionManager {
     // Looking at the session consumes its completion reminder (dot clears).
     this.completedNotifications.delete(sessionId)
     void this.refreshSubagents(sessionId)
+    this.pruneResidentWindows()
     this.notifier.notifyNow()
   }
 
@@ -216,6 +222,7 @@ export class SessionManager {
     this.selected = address.childSessionId
     this.completedNotifications.delete(address.childSessionId)
     void this.refreshSubagents(address.childSessionId)
+    this.pruneResidentWindows()
     this.notifier.notifyNow()
   }
 
@@ -261,6 +268,31 @@ export class SessionManager {
    */
   drop(sessionId: SessionId): void {
     this.sessions.delete(sessionId)
+  }
+
+  /**
+   * Release resident windows beyond {@link MAX_RESIDENT_WINDOWS}, oldest open
+   * first. The selected session and running sessions are exempt; released
+   * instances stay warm (queue mirror, address, blank bit) and re-fetch
+   * history on the next open. Called on selection changes, where the window
+   * set is stable enough to prune without racing an in-flight open.
+   */
+  private pruneResidentWindows(): void {
+    const open = [...this.sessions.values()].filter(session => session.hasOpenWindow())
+    if (open.length <= MAX_RESIDENT_WINDOWS) return
+    const running = new Set(
+      this.summaries.filter(summary => summary.running).map(summary => summary.sessionId),
+    )
+    const candidates = open
+      .filter(session => session.sessionId !== this.selected && !running.has(session.sessionId))
+      .sort((left, right) => left.lastActiveAt - right.lastActiveAt)
+    while (open.length > MAX_RESIDENT_WINDOWS && candidates.length > 0) {
+      const session = candidates.shift()
+      if (session === undefined) break
+      session.releaseWindow()
+      const index = open.indexOf(session)
+      if (index >= 0) open.splice(index, 1)
+    }
   }
 
   /**

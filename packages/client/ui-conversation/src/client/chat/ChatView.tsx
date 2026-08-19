@@ -20,8 +20,38 @@ import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
-
+import {
+  computeWindow, prefixSums, ROW_ESTIMATE_HEIGHT, tailWindow,
+  WINDOW_BUFFER_ROWS, WINDOW_THRESHOLD,
+} from './chat-window.ts'
+import type { RowGeometry } from './chat-window.ts'
 const FOLLOW_THRESHOLD = 24
+
+/** Pixel buffer kept mounted above/below the viewport while windowed
+ *  (WINDOW_BUFFER_ROWS rows at the estimate height). */
+const WINDOW_BUFFER_PX = WINDOW_BUFFER_ROWS * ROW_ESTIMATE_HEIGHT
+
+/** Kind-level fallback heights (px) used before a row is measured, so the
+ *  scrollbar and spacers track long flows from the first paint. */
+const KIND_ESTIMATES: Readonly<Record<string, number>> = {
+  'assistant-step': 160,
+  user: 84,
+  steering: 72,
+  context: 84,
+  'tool-call': 132,
+  command: 64,
+  'manual-compaction': 96,
+  compaction: 132,
+  'model-retry': 96,
+  'turn-error': 84,
+  'turn-max-tokens': 84,
+  'turn-tail': 56,
+  unknown: 64,
+}
+
+function kindEstimate(kind: string | undefined): number {
+  return kind === undefined ? ROW_ESTIMATE_HEIGHT : (KIND_ESTIMATES[kind] ?? ROW_ESTIMATE_HEIGHT)
+}
 
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
@@ -33,6 +63,15 @@ interface PagingAnchor {
   key: string
   /** Row top relative to the scrollport after the latest user scroll. */
   top: number
+}
+
+/** One mounted windowing view: the half-open row range plus the spacer
+ *  heights that preserve scrollHeight for rows mounted out of the window. */
+interface WindowView {
+  readonly start: number
+  readonly end: number
+  readonly top: number
+  readonly bottom: number
 }
 
 /** Find an already-rendered settled row without interpolating a selector. */
@@ -197,6 +236,42 @@ export function ChatView({
   /** Guard against a second schedule while one pass is pending (also correct
    *  under a synchronous requestAnimationFrame shim). */
   const scrollScheduledRef = useRef(false)
+  /** Windowing is enabled only in a real browser (ResizeObserver present)
+   *  on long flows; jsdom and small sessions keep the full-mount path. */
+  const windowing = typeof ResizeObserver !== 'undefined' && typeof ResizeObserverEntry !== 'undefined'
+    && order.length >= WINDOW_THRESHOLD
+
+  // Scroll anchoring would fight the spacer math: a measured height change
+  // shifts the top spacer, the browser adjusts scrollTop to keep the viewport
+  // content stable, the window recomputes, and the two oscillate until React
+  // gives up. While windowed, anchor the scrollport to nothing and own the
+  // position ourselves (the existing reader-attribution ledger already does).
+  useEffect(() => {
+    const local = listRef.current
+    if (local === null) return
+    const el = scrollerOf(local)
+    const previous = el.style.overflowAnchor
+    if (windowedRef.current) el.style.overflowAnchor = 'none'
+    return () => {
+      el.style.overflowAnchor = previous
+    }
+    // Re-run when windowing toggles (the ref mirrors it during render).
+  }, [windowing])
+  const windowedRef = useRef(false)
+  windowedRef.current = windowing
+  const orderRef = useRef(order)
+  orderRef.current = order
+  const heightsRef = useRef(new Map<string, number>())
+  const geometry = useMemo<RowGeometry>(
+    () => ({ heights: heightsRef.current, estimate: ROW_ESTIMATE_HEIGHT }),
+    [],
+  )
+  const heights = geometry.heights
+  /** Mounted row window plus spacer heights; null while windowing is off. */
+  const [windowView, setWindowView] = useState<WindowView | null>(null)
+  const windowViewRef = useRef<WindowView | null>(null)
+  const measureRafRef = useRef<number | null>(null)
+  const sessionIdRef = useRef(sessionId)
 
   const firstKey = order[0]
   const firstSeq = firstKey === undefined ? null : nodeStore.get(firstKey)?.anchorSeq ?? null
@@ -207,12 +282,96 @@ export function ChatView({
 
   const toBottom = (el: HTMLElement): void => {
     anchorRef.current = null
-    el.scrollTop = el.scrollHeight
+    if (windowedRef.current) {
+      // Pinned readers see the flow tail: mount the tail window and place the
+      // scrollport at the content floor computed from the height table (the
+      // DOM scrollHeight lags measurement by a frame; the observer converges).
+      const next = tailWindow(orderRef.current, geometry, el.clientHeight, WINDOW_BUFFER_PX)
+      const sums = prefixSums(orderRef.current, geometry)
+      windowViewRef.current = {
+        start: next.start,
+        end: next.end,
+        top: sums[next.start] ?? 0,
+        bottom: (sums[orderRef.current.length] ?? 0) - (sums[next.end] ?? 0),
+      }
+      setWindowView(windowViewRef.current)
+      el.scrollTop = Math.max(0, (sums[orderRef.current.length] ?? 0) - el.clientHeight)
+    } else {
+      el.scrollTop = el.scrollHeight
+    }
     observedTopRef.current = el.scrollTop
     atBottomRef.current = true
     setAtBottom(true)
     chatScroll.save(null)
   }
+
+  /** Seed kind-level height estimates for unmeasured rows (measurement
+   *  replaces them as rows paint); prunes keys that left the flow. */
+  const seedHeights = (): void => {
+    const keys = orderRef.current
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]
+      if (key === undefined) continue
+      if (heightsRef.current.has(key)) continue
+      heightsRef.current.set(key, kindEstimate(nodeStore.get(key)?.kind))
+    }
+    if (heightsRef.current.size > keys.length + 128) {
+      const live = new Set(keys)
+      for (const key of heightsRef.current.keys()) {
+        if (!live.has(key)) heightsRef.current.delete(key)
+      }
+    }
+  }
+
+  /** Recompute the mounted window and spacer heights from the latest scroll
+   *  geometry and height cache; a no-op when the view is unchanged. */
+  const refreshWindow = (): void => {
+    if (!windowedRef.current) return
+    const local = listRef.current
+    /* v8 ignore next -- ref-null guard: refresh runs from effects that own a live list. */
+    if (local === null) return
+    seedHeights()
+    const el = scrollerOf(local)
+    const range = computeWindow(orderRef.current, geometry, el.scrollTop, el.scrollTop + el.clientHeight, WINDOW_BUFFER_PX)
+    const sums = prefixSums(orderRef.current, geometry)
+    const next: WindowView = {
+      start: range.start,
+      end: range.end,
+      top: sums[range.start] ?? 0,
+      bottom: (sums[orderRef.current.length] ?? 0) - (sums[range.end] ?? 0),
+    }
+    const prev = windowViewRef.current
+    if (prev === null || prev.start !== next.start || prev.end !== next.end
+      || prev.top !== next.top || prev.bottom !== next.bottom) {
+      windowViewRef.current = next
+      setWindowView(next)
+    }
+  }
+  /** Measurement-only refresh: keep the mounted window range, recompute only
+   *  the spacer heights from the latest height cache. Unlike refreshWindow this
+   *  never moves the window, so measuring a row cannot cascade into mounting
+   *  new rows (the loop that starved the main thread on wheel scrolls). */
+  const applyMeasured = (): void => {
+    const prev = windowViewRef.current
+    if (!windowedRef.current || prev === null) return
+    const sums = prefixSums(orderRef.current, geometry)
+    const next: WindowView = {
+      start: prev.start,
+      end: prev.end,
+      top: sums[prev.start] ?? 0,
+      bottom: (sums[orderRef.current.length] ?? 0) - (sums[prev.end] ?? 0),
+    }
+    if (next.top !== prev.top || next.bottom !== prev.bottom) {
+      windowViewRef.current = next
+      setWindowView(next)
+    }
+  }
+  const applyMeasuredRef = useRef<() => void>(() => {})
+  applyMeasuredRef.current = applyMeasured
+
+  const refreshWindowRef = useRef<() => void>(() => {})
+  refreshWindowRef.current = refreshWindow
+
 
   useLayoutEffect(() => {
     const local = listRef.current
@@ -242,6 +401,7 @@ export function ChatView({
       firstSeqRef.current = firstSeq
       lastKeyRef.current = lastKey
       lastSteeringIdRef.current = lastSteeringId
+      refreshWindowRef.current()
       followSigRef.current = followSig
       return
     }
@@ -252,12 +412,23 @@ export function ChatView({
       const anchor = anchorRef.current
       anchorRef.current = null
       const row = anchorElement(local, anchor.key)
-      if (row !== null) el.scrollTop += flowTop(row, el) - anchor.top
+      if (row !== null) {
+        el.scrollTop += flowTop(row, el) - anchor.top
+      } else if (windowedRef.current) {
+        // Windowing may have unmounted the anchor row: place it from the
+        // height table (its content top is the prefix sum before its index).
+        const index = orderRef.current.indexOf(anchor.key)
+        if (index >= 0) {
+          const sums = prefixSums(orderRef.current, geometry)
+          el.scrollTop = Math.max(0, (sums[index] ?? 0) - anchor.top)
+        }
+      }
       observedTopRef.current = el.scrollTop
       firstSeqRef.current = firstSeq
       /* v8 ignore next -- ?? arm: a prepend adds nodes, so the flow list here is never empty. */
       lastKeyRef.current = lastKey
       lastSteeringIdRef.current = lastSteeringId
+      refreshWindowRef.current()
       followSigRef.current = followSig
       return
     }
@@ -273,6 +444,7 @@ export function ChatView({
     // Follow new flow content while pinned; do NOT re-pin on every render
     // merely because atBottomRef is true (scroll threshold → setState → snap).
     if (appendedUser || appendedSteering || (tipMoved && atBottomRef.current)) toBottom(el)
+    refreshWindowRef.current()
   })
 
   const onScrollRef = useRef(() => {})
@@ -286,6 +458,9 @@ export function ChatView({
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollScheduledRef.current = false
       scrollRafRef.current = null
+      // The window follows reader geometry; refresh before the anchor pass so
+      // saved positions and spacer math agree with the mounted window.
+      refreshWindowRef.current()
       const local = listRef.current
       /* v8 ignore next -- ref-null guard: the handler only fires while mounted. */
       if (local === null) return
@@ -366,6 +541,54 @@ export function ChatView({
     return () => { observer.disconnect() }
   }, [])
 
+  // Windowing height cache: measure every mounted row and feed the cache back
+  // into spacer math. Unmeasured rows already carry kind-level estimates, so
+  // the first measurement just tightens the scrollbar; streaming growth of a
+  // mounted row is captured on the same observer (the column follower already
+  // owns pinned-scroll re-pinning; this effect only refreshes window geometry).
+  useEffect(() => {
+    if (!windowedRef.current || typeof ResizeObserver === 'undefined') return
+    const column = columnRef.current
+    if (column === null) return
+    const observer = new ResizeObserver((entries) => {
+      let changed = false
+      for (const entry of entries) {
+        const target = entry.target as HTMLElement
+        const key = target.dataset.chatFlowKey
+        if (key === undefined || target.offsetHeight <= 0) continue
+        if (heightsRef.current.get(key) !== target.offsetHeight) {
+          heightsRef.current.set(key, target.offsetHeight)
+          changed = true
+        }
+      }
+      if (changed && measureRafRef.current === null) {
+        measureRafRef.current = requestAnimationFrame(() => {
+          measureRafRef.current = null
+          // Spacers only: never re-derive the window from measured heights here
+          // (see applyMeasured — remounting rows from a height change loops).
+          applyMeasuredRef.current()
+        })
+      }
+    })
+    for (const row of column.querySelectorAll<HTMLElement>('[data-chat-flow-key]')) observer.observe(row)
+    return () => {
+      observer.disconnect()
+      if (measureRafRef.current !== null) cancelAnimationFrame(measureRafRef.current)
+      measureRafRef.current = null
+    }
+  }, [heights, windowView])
+
+
+  // A different session on the same mounted seat clears the windowing state:
+  // node keys are session-local and stale heights must not leak across sessions.
+  useEffect(() => {
+    if (sessionIdRef.current === sessionId) return
+    sessionIdRef.current = sessionId
+    heightsRef.current.clear()
+    windowViewRef.current = null
+    setWindowView(null)
+  }, [sessionId])
+
   // A failed/empty page leaves the head unchanged. Once the request leaves
   // its busy state there is no future prepend for the saved anchor to own.
   useEffect(() => {
@@ -391,7 +614,7 @@ export function ChatView({
   return (
     <div className={css.root}>
       <div ref={listRef} className={css.scroll}>
-        <div ref={columnRef} className={css.column} data-chat-flow="">
+        <div ref={columnRef} className={css.column} data-chat-flow="" data-windowed={windowing && windowView !== null ? '' : undefined}>
           {openState === 'loading' && <div className={css.hint}>{t('chat.loadingHistory')}</div>}
           {openState === 'error' && openError !== null && (
             <div className={css.openError}>
@@ -405,7 +628,32 @@ export function ChatView({
               </button>
             </div>
           )}
-          {order.map(nodeKey => (
+          {windowing && windowView !== null && windowView.end <= order.length ? (
+            <>
+              {windowView.top > 0 && (
+                <div className={css.windowSpacer} style={{ height: windowView.top }} aria-hidden="true" />
+              )}
+              {order.slice(windowView.start, windowView.end).map(nodeKey => (
+                <ChatNodeSeat
+                  key={nodeKey}
+                  nodeKey={nodeKey}
+                  useSession={useSession}
+                  selectedCallId={selectedCallId}
+                  cwd={cwd}
+                  openFile={openFile}
+                  inspectCall={inspectCall}
+                  forkAt={forkAt}
+                  loadImage={loadImage}
+                  fileMentions={fileMentions}
+                  renderSlot={renderSlot}
+                  t={t}
+                />
+              ))}
+              {windowView.bottom > 0 && (
+                <div className={css.windowSpacer} style={{ height: windowView.bottom }} aria-hidden="true" />
+              )}
+            </>
+          ) : order.map(nodeKey => (
             <ChatNodeSeat
               key={nodeKey}
               nodeKey={nodeKey}
