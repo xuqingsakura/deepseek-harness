@@ -14,8 +14,7 @@
   top: 80px;
   bottom: 0px;
   background: rgba(0, 0, 0, 0.24);
-  /* Mask-blur */
-  backdrop-filter: blur(2px);
+  /* Perf: full-viewport backdrop-filter re-blurs the whole page on every paint; the 2px mask blur is visually negligible, so the mask is a plain tinted layer. */
 }
 
 .onboardingStage {

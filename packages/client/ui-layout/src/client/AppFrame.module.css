@@ -5,10 +5,10 @@
   height: 100%;
   overflow: hidden;
   background: var(--dsw-alias-bg-base);
-  /* Collapse/expand animates the tracks on the deepsuite sider curve
-     (--ds-ease-in-out / --ds-transition-duration-slow, ui-theme base.css). */
-  transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out),
-    grid-template-rows var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  /* Perf: grid-template-columns/rows are layout properties — animating them
+     reflows the whole frame every frame, which stutters on long sessions.
+     Collapse/expand/dock switches land instantly; the drag handles already
+     disable transitions while dragging. */
 }
 
 /* Dragging writes widths at pointer cadence; easing them would detach the
@@ -91,9 +91,9 @@
   cursor: col-resize;
   z-index: 2;
   touch-action: none;
-  /* Rides the same curve as the tracks so the pill stays on the moving
-     border during collapse/expand; paused while dragging (frame rule). */
-  transition: left var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  /* Perf: the frame switches grid tracks instantly (layout animation
+     removed), so a lingering left transition would trail the border. */
+  transition: none;
 }
 
 .frame[data-dragging] .handle {

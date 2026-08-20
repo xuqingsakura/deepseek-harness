@@ -107,8 +107,17 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
   useEffect(() => {
     if (!open || liveCount === 0) return
     setNow(Date.now())
-    const timer = setInterval(() => { setNow(Date.now()) }, 1_000)
-    return () => { clearInterval(timer) }
+    // Hidden pages need no live clock; skip the ticks and resync on return.
+    const timer = setInterval(() => {
+      if (document.hidden) return
+      setNow(Date.now())
+    }, 1_000)
+    const onVisibility = (): void => { if (document.visibilityState === 'visible') setNow(Date.now()) }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [open, liveCount])
 
   // The last job disappearing removes this control; close first so focus does

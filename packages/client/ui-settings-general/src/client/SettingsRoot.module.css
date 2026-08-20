@@ -61,7 +61,7 @@
   position: absolute;
   inset: 0;
   background: var(--dsw-alias-bg-mask-1);
-  backdrop-filter: var(--dsw-mask-blur);
+  /* Perf: a full-viewport backdrop-filter blur forces the compositor to re-blur the whole page on every paint; the 2px mask blur is visually negligible, so the mask is a plain tinted layer. */
 }
 
 /* Panel (figma Settings 501:29947): r24, white, lv3 shadow (figma effects
