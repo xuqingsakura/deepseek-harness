@@ -1012,7 +1012,7 @@ describe('useCalendarDay boundary refresh', () => {
 describe('small branch tails', () => {
   it('AssistantMarkdown folds a very long reply head behind an expand control', () => {
     const blocks = Array.from({ length: 200 }, (_, index) => ({ kind: 'text' as const, text: `block-${index}` }))
-    const view = render(<AssistantMarkdown t={t} blocks={blocks} streaming={false} />)
+    const view = render(<AssistantMarkdown t={t} blocks={blocks} streaming={false} renderMessageImages={renderMessageImages} />)
     // Tail window only: the folded head is gone, the live tail is present.
     expect(view.queryByText('block-0')).toBeNull()
     expect(view.getByText('block-199')).toBeTruthy()
@@ -1025,10 +1025,10 @@ describe('small branch tails', () => {
   })
 
   it('AssistantMarkdown leaves short replies and growing streams unfolded', () => {
-    const short = render(<AssistantMarkdown t={t} blocks={[{ kind: 'text', text: 'short' }]} streaming={false} />)
+    const short = render(<AssistantMarkdown t={t} blocks={[{ kind: 'text', text: 'short' }]} streaming={false} renderMessageImages={renderMessageImages} />)
     expect(short.getByText('short')).toBeTruthy()
     expect(short.queryByText('展开')).toBeNull()
-    const streaming = render(<AssistantMarkdown t={t} blocks={[{ kind: 'text', text: 'live' }]} streaming />)
+    const streaming = render(<AssistantMarkdown t={t} blocks={[{ kind: 'text', text: 'live' }]} streaming renderMessageImages={renderMessageImages} />)
     expect(streaming.getByText('live')).toBeTruthy()
     expect(streaming.queryByText('展开')).toBeNull()
   })

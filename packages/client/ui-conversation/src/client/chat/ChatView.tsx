@@ -693,7 +693,7 @@ export function ChatView({
                   openFile={openFile}
                   inspectCall={inspectCall}
                   forkAt={forkAt}
-                  loadImage={loadImage}
+                  renderMessageImages={renderMessageImages}
                   fileMentions={fileMentions}
                   renderSlot={renderSlot}
                   t={t}
