@@ -12,6 +12,11 @@ files:
 extraResources:
   - from: out/runtime
     to: runtime
+    # A stale half-deleted closure (pnpm hard links refuse deletion) must not
+    # ship; the packaging deploy step always rebuilds out/runtime/host-deploy.
+    filter:
+      - "**/*"
+      - "!host-deploy-stale/**"
   # Vendored pnpm (official dsh plugin installer) shipped for Settings → Plugins.
   - from: runtime/pnpm
     to: pnpm
