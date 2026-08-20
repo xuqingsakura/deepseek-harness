@@ -7,6 +7,7 @@ export const NS = 'workbench'
 export const zh = {
   'toggle.aria': '打开工作台',
   'toggle.open': '工作台',
+  'toggle.detach': '独立窗口',
   'panel.title': '工作台',
   'panel.splitter': '调整文件树宽度',
   'tab.files': '文件',
@@ -120,6 +121,7 @@ export const zh = {
 export const en: Record<WorkbenchKey, string> = {
   'toggle.aria': 'Open workbench',
   'toggle.open': 'Workbench',
+  'toggle.detach': 'Detach window',
   'panel.title': 'Workbench',
   'panel.splitter': 'Resize file tree',
   'tab.files': 'Files',

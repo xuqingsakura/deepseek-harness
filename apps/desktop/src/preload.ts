@@ -72,6 +72,8 @@ export interface DesktopBridge {
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void
   /** Import Web-harness data (~/.dsh) into the desktop home (safe merge). */
   migrateWebData(options?: MigrateOptions): Promise<MigrationReport>
+  /** Open (or focus) a detached VSCode-style workbench window for one session. */
+  openWorkbenchWindow(sessionId?: string): Promise<unknown>
 }
 
 declare global {
@@ -124,6 +126,8 @@ const bridge: DesktopBridge = {
   updateCheck: () => ipcRenderer.invoke('dsh:update-check') as Promise<DesktopUpdateState>,
   updateInstall: () => { void ipcRenderer.invoke('dsh:update-install') },
   migrateWebData: (options?: MigrateOptions) => ipcRenderer.invoke('dsh:migrate-web-data', options ?? {}) as Promise<MigrationReport>,
+  /** Open (or focus) a detached VSCode-style workbench window for one session. */
+  openWorkbenchWindow: (sessionId?: string) => ipcRenderer.invoke('dsh:open-workbench-window', sessionId),
   onUpdateState: (callback: (state: DesktopUpdateState) => void) => {
     const listener = (_event: IpcRendererEvent, state: DesktopUpdateState): void =>{  callback(state) }
     ipcRenderer.on('dsh:update-state', listener)

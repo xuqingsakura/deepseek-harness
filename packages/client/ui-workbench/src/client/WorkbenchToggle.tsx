@@ -21,26 +21,43 @@ export type WorkbenchToggleProps =
 export function WorkbenchToggle({ sessionId, workbench, layout, t }: WorkbenchToggleProps) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot)
   const active = state.open && state.sessionId === sessionId
+  const detach = (): void => {
+    // Desktop shell only: open a detached VSCode-style workbench window bound
+    // to this session. Absent (web browser), the button stays hidden.
+    const desktop = (window as unknown as { dshDesktop?: { openWorkbenchWindow?: (sessionId?: string) => Promise<unknown> } }).dshDesktop
+    void desktop?.openWorkbenchWindow?.(sessionId)
+  }
   return (
-    <button
-      type="button"
-      className={css.trigger}
-      aria-pressed={active}
-      aria-label={t('toggle.aria')}
-      onClick={() => {
-        if (active) {
-          workbench.set({ open: false })
-          layout.closeWorkbench()
-        } else {
-          // Switching conversations drops the previous session's open tabs.
-          workbench.set(state.sessionId === sessionId
-            ? { sessionId, open: true }
-            : { sessionId, open: true, openPaths: [], activePath: undefined })
-          layout.openWorkbench()
-        }
-      }}
-    >
-      {t('toggle.open')}
-    </button>
+    <>
+      <button
+        type="button"
+        className={css.trigger}
+        aria-pressed={active}
+        aria-label={t('toggle.aria')}
+        onClick={() => {
+          if (active) {
+            workbench.set({ open: false })
+            layout.closeWorkbench()
+          } else {
+            // Switching conversations drops the previous session's open tabs.
+            workbench.set(state.sessionId === sessionId
+              ? { sessionId, open: true }
+              : { sessionId, open: true, openPaths: [], activePath: undefined })
+            layout.openWorkbench()
+          }
+        }}
+      >
+        {t('toggle.open')}
+      </button>
+      <button
+        type="button"
+        className={css.trigger}
+        aria-label={t('toggle.detach')}
+        onClick={detach}
+        title={t('toggle.detach')}
+      >
+        {t('toggle.detach')}
+      </button>
+    </>
   )
 }

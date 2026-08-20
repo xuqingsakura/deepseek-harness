@@ -381,6 +381,7 @@ function createMainWindow(url: string | undefined, onClosed: () => void): Browse
       event.preventDefault()
     }
   })
+
   if (url !== undefined) {
     void window.loadURL(url)
   } else {
@@ -389,6 +390,59 @@ function createMainWindow(url: string | undefined, onClosed: () => void): Browse
   }
   return window
 }
+/** The single detached workbench window (VSCode-style), or undefined. */
+let workbenchWindow: BrowserWindow | undefined
+
+/**
+ * Open (or focus) a detached workbench window bound to one session. The
+ * window loads the same host origin with `?dshWindow=workbench&session=`, so
+ * the web UI boots straight into the three-column file workbench; the shared
+ * in-process host and the same-origin localStorage make the two windows
+ * interoperate without extra state channels.
+ * @param sessionId - the session to open in the workbench; absent keeps the
+ *   URL's own default (the persisted current session).
+ * @returns the created (or existing) workbench window.
+ */
+function createWorkbenchWindow(sessionId: string | undefined): BrowserWindow {
+  if (workbenchWindow !== undefined && !workbenchWindow.isDestroyed()) {
+    if (!workbenchWindow.isVisible()) workbenchWindow.show()
+    workbenchWindow.focus()
+    return workbenchWindow
+  }
+  const main = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
+  const base = main === undefined ? undefined : main.webContents.getURL()
+  const url = base === undefined ? undefined : new URL(base)
+  const window = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 940,
+    minHeight: 600,
+    show: false,
+    frame: false,
+    backgroundColor: '#0d1117',
+    ...(existsSync(APP_ICON) ? { icon: APP_ICON } : {}),
+    webPreferences: {
+      preload: PRELOAD,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  })
+  window.once('ready-to-show', () => { window.show() })
+  window.on('closed', () => {
+    if (workbenchWindow === window) workbenchWindow = undefined
+  })
+  if (url !== undefined) {
+    url.searchParams.set('dshWindow', 'workbench')
+    if (sessionId !== undefined && sessionId !== '') url.searchParams.set('session', sessionId)
+    void window.loadURL(url.toString())
+  } else {
+    void window.loadURL(splashDataUrl(harnessHome()))
+  }
+  workbenchWindow = window
+  return window
+}
+
 
 /** Toggle the shell window between shown/focused and tray-hidden. */
 function toggleWindow(window: BrowserWindow | undefined): void {
@@ -696,6 +750,11 @@ if (GEN_ICON_DIR !== undefined) {
     }
   })
 } else {
+  // Detached workbench window (VSCode-style): the web UI reads ?dshWindow=workbench.
+  ipcMain.handle('dsh:open-workbench-window', (_event, sessionId: unknown) => {
+    createWorkbenchWindow(typeof sessionId === 'string' ? sessionId : undefined)
+  })
+
   // Custom title bar controls: the preload's buttons reach the owning window here.
   ipcMain.on('dsh:window-control', (event, action: unknown) => {
     const target = BrowserWindow.fromWebContents(event.sender)

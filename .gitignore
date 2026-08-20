@@ -51,3 +51,19 @@ apps/desktop/.dsh-home/
 apps/desktop/runtime/pnpm/
 apps/desktop/build/
 apps/desktop/*.log
+
+# Stray compiler emit must never land beside source: rewriteRelativeImportExtensions
+# can emit .js/.d.ts next to .ts when a package loses its outDir; those belong in
+# lib/ only. css-modules.d.ts and env.d.ts are real source and stay tracked.
+packages/*/*/src/**/*.js
+packages/*/*/src/**/*.js.map
+packages/*/*/src/**/*.d.ts.map
+packages/*/*/src/**/*.d.ts
+!packages/*/*/src/**/css-modules.d.ts
+!packages/*/*/src/**/env.d.ts
+apps/*/src/**/*.js
+apps/*/src/**/*.js.map
+apps/*/src/**/*.d.ts.map
+apps/*/src/**/*.d.ts
+!apps/*/src/**/css-modules.d.ts
+!apps/*/src/**/env.d.ts
