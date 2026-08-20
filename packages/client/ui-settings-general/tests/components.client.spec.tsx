@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
+import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { SettingsDocumentStore } from '../src/client/settings-document-store.ts'
+
+/** Store over a real mirror derived from the same fake wire. */
+function derivedDocumentStore(api: object) {
+  const wire = api as never
+  return new SettingsDocumentStore(wire, new SettingsDescribeMirror(wire))
+}
 import { en } from '../src/client/locales.ts'
 import { MigrateDataRow } from '../src/client/MigrateDataRow.tsx'
 
@@ -65,7 +72,7 @@ describe('SettingsDocumentAction', () => {
       rpcId: 'document-open' as never,
       result: { ok: true as const, value: { opened: true as const } },
     }))
-    const controller = new SettingsDocumentStore({
+    const controller = derivedDocumentStore({
       settings: {
         describe: vi.fn(() => Promise.resolve({
           rpcId: 'document-action' as never,
@@ -76,7 +83,7 @@ describe('SettingsDocumentAction', () => {
         })),
         openDocument,
       },
-    } as never)
+    })
     render(<SettingsDocumentAction
       {...kit}
       t={t}
@@ -88,7 +95,7 @@ describe('SettingsDocumentAction', () => {
     await waitFor(() => { expect(openDocument).toHaveBeenCalledWith({}) })
   })
 
-  it('stays absent without a document and retries availability after remount', async () => {
+  it('stays absent without a document and follows a mirror refresh to available', async () => {
     const describe = vi.fn()
       .mockResolvedValueOnce({
         rpcId: 'document-action-absent' as never,
@@ -98,12 +105,9 @@ describe('SettingsDocumentAction', () => {
         rpcId: 'document-action-ready' as never,
         result: { ok: true as const, value: { writable: true, hasDocument: true, namespaces: [] } },
       })
-    const controller = new SettingsDocumentStore({
-      settings: {
-        describe,
-        openDocument: vi.fn(),
-      },
-    } as never)
+    const wire = { settings: { describe, openDocument: vi.fn() } } as never
+    const mirror = new SettingsDescribeMirror(wire)
+    const controller = new SettingsDocumentStore(wire, mirror)
     const first = render(<SettingsDocumentAction
       {...kit}
       t={t}
@@ -119,12 +123,17 @@ describe('SettingsDocumentAction', () => {
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
     />)
+    // A remount alone re-reads nothing; availability moves with the mirror's
+    // own refresh (a document commit or reconnect in production).
+    await waitFor(() => { expect(controller.store.getSnapshot().status).toBe('unavailable') })
+    expect(describe).toHaveBeenCalledTimes(1)
+    await mirror.load()
     expect(await screen.findByRole('button', { name: 'Open configuration file' })).toBeTruthy()
     expect(describe).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the action available and reports a native-open failure', async () => {
-    const controller = new SettingsDocumentStore({
+    const controller = derivedDocumentStore({
       settings: {
         describe: vi.fn(() => Promise.resolve({
           rpcId: 'document-action' as never,
@@ -138,7 +147,7 @@ describe('SettingsDocumentAction', () => {
           result: { ok: false as const, error: { code: 'internal' as const, message: 'xdg-open missing', details: {} } },
         })),
       },
-    } as never)
+    })
     render(<SettingsDocumentAction
       {...kit}
       t={t}

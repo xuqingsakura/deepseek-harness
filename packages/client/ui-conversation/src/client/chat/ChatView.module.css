@@ -218,3 +218,8 @@
   content-visibility: visible;
   contain-intrinsic-size: none;
 }
+
+/* Host open-path refusal: same dialog family as the workspace folder error. */
+.modalAction {
+  min-width: 72px;
+}
