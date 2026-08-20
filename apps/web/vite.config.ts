@@ -161,6 +161,7 @@ export default defineConfig({
     // browserizes the vendored Cordis Loader's only Node import.
     alias: [
       { find: /^node:module$/, replacement: src('./src/node-module-stub.ts') },
+      { find: /^node:url$/, replacement: src('./src/node-url-stub.ts') },
     ],
   },
   define: {
