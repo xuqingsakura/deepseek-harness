@@ -173,114 +173,36 @@ console.log(`deploy-runtime: refreshed ${RUNTIME_DSH_LIB}`)
 console.log(`deploy-runtime: embed.js -> ${bundleName} (${exportsList.length} exports)`)
 pruneClosure()
 
-/** Provider slugs the desktop keeps in pi-ai's builtin catalog (DeepSeek, Xiaomi/MiMo, OpenCode Zen/Zen Go, and the shared image provider). */
-const PI_AI_KEEP_PROVIDERS = new Set([
-  'deepseek', 'xiaomi', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn',
-  'xiaomi-token-plan-sgp', 'opencode', 'opencode-go', 'openrouter-images', 'faux',
-])
-/** Non-lazy pi-ai API implementations for dropped providers; their .lazy wrappers stay (dsh-llm-pi-ai imports them). */
-const PI_AI_DROPPED_API_IMPLS = new Set([
-  'azure-openai-responses.js', 'bedrock-converse-stream.js',
-  'google-vertex.js', 'mistral-conversations.js',
-  'openai-codex-responses.js',
-])
-
 /**
- * Trim pi-ai's builtin provider catalog to DeepSeek + the Xiaomi (MiMo) + OpenCode (Zen/Zen Go) families.
- * The web profile only mounts `llm-deepseek` and `llm-pi-ai`, yet pi-ai's
- * `providers/all.js` catalog (loaded eagerly by dsh-llm-pi-ai) statically
- * imports ~33 vendor entries. Keep the deepseek/xiaomi entries and drop the
- * rest: per-provider files, model data, the non-lazy API implementations of
- * dropped providers, and their unique dependency scopes (@aws-sdk for Bedrock).
- * The `openai` npm package stays: the kept Xiaomi provider talks through the
- * OpenAI-compatible completions API, which imports it.
+ * Restore pi-ai full builtin provider catalog into the deployed closure.
+ *
+ * The desktop ships every provider the pi-ai catalog describes (DeepSeek,
+ * Xiaomi/MiMo, OpenCode, Anthropic, OpenAI, Google, Bedrock, Azure, Mistral,
+ * Qwen, Zai, ...) rather than a trimmed subset. The pristine catalog is copied
+ * from the pnpm store on every deploy so a previously trimmed closure is
+ * repaired; the per-provider removal and heavy-dependency (AWS) scope pruning
+ * that used to shrink the installer are intentionally skipped.
  */
 function trimPiAiProviders() {
   const modulesRoot = resolve(APP_ROOT, 'out', 'runtime', 'host-deploy', 'node_modules')
   const dist = join(modulesRoot, '@earendil-works', 'pi-ai', 'dist')
   if (!existsSync(dist)) return
-  let removed = 0
-  // The desktop starts from the pristine catalog every deploy (the previous
-  // run may have trimmed it), so restore the full set first. Provider slugs
-  // come from all.js imports; helper files (github-copilot-headers.js,
-  // google-shared.js, ...) imported by kept APIs are NOT provider entries and
-  // must survive the trim.
   const srcProviders = join(findInStore('@earendil-works/pi-ai'), 'dist', 'providers')
   if (existsSync(srcProviders)) {
     rmSync(join(dist, 'providers'), { recursive: true, force: true })
     copyDir(srcProviders, join(dist, 'providers'))
   }
   const srcModels = join(findInStore('@earendil-works/pi-ai'), 'dist', 'models.generated.js')
-  if (existsSync(srcModels)) copyFileSync(srcModels, join(dist, 'models.generated.js'))
-  // The api/ directory holds the non-lazy backends AND shared helpers
-  // (github-copilot-headers.js, google-shared.js, ...) kept APIs import;
-  // restore it wholesale and let the dropped-impl set prune the extras.
+  if (existsSync(srcModels)) {
+    rmSync(join(dist, 'models.generated.js'), { force: true })
+    copyFileSync(srcModels, join(dist, 'models.generated.js'))
+  }
   const srcApi = join(findInStore('@earendil-works/pi-ai'), 'dist', 'api')
   if (existsSync(srcApi)) {
     rmSync(join(dist, 'api'), { recursive: true, force: true })
     copyDir(srcApi, join(dist, 'api'))
   }
-  const providerSlugs = new Set()
-  for (const line of readFileSync(join(dist, 'providers', 'all.js'), 'utf8').split(/\r?\n/)) {
-    const imp = /^import \{ \w+ \} from "\.\/([a-z0-9-]+)\.js";$/.exec(line)
-    if (imp !== null) providerSlugs.add(imp[1])
-  }
-  const removeFile = (file) => {
-    if (!existsSync(file)) return
-    rmSync(file, { force: true })
-    removed += 1
-  }
-  const rewrite = (relative, dropLine) => {
-    const path = join(dist, relative)
-    const lines = readFileSync(path, 'utf8').split(/\r?\n/)
-    const kept = lines.filter((line) => !dropLine(line))
-    writeFileSync(path, kept.join('\n'))
-    removed += lines.length - kept.length
-  }
-  const droppedImports = new Set()
-  const keptAllExports = new Set(['deepseekProvider', 'xiaomiProvider', 'xiaomiTokenPlanAmsProvider',
-    'xiaomiTokenPlanCnProvider', 'xiaomiTokenPlanSgpProvider', 'opencodeProvider', 'opencodeGoProvider', 'openrouterImagesProvider',
-    'getBuiltinModel', 'getBuiltinProviders', 'getBuiltinModelDataGeneratedAt', 'getBuiltinModels',
-    'builtinProviders', 'builtinModels', 'builtinImagesProviders', 'builtinImagesModels'])
-  rewrite(join('providers', 'all.js'), (line) => {
-    const imp = /^import \{ (\w+) \} from "\.\/([a-z0-9-]+)\.js";$/.exec(line)
-    if (imp !== null && !PI_AI_KEEP_PROVIDERS.has(imp[2])) {
-      droppedImports.add(imp[1])
-      return true
-    }
-    const entry = /^(\w+)\(\),$/.exec(line.trim())
-    if (entry !== null && droppedImports.has(entry[1])) return true
-    const exp = /^export \{ (\w+) \};$/.exec(line)
-    if (exp !== null && !keptAllExports.has(exp[1])) return true
-  })
-  rewrite(join('models.generated.js'), (line) => {
-    const imp = /^import \{ \w+ \} from "\.\/providers\/([a-z0-9-]+)\.models\.js";$/.exec(line)
-    if (imp !== null && !PI_AI_KEEP_PROVIDERS.has(imp[1])) return true
-    const entry = /^\s*"([a-z0-9-]+)":/.exec(line)
-    return entry !== null && !PI_AI_KEEP_PROVIDERS.has(entry[1])
-  })
-  const providersDir = join(dist, 'providers')
-  for (const file of readdirSync(providersDir)) {
-    if (!file.endsWith('.js') || file === 'all.js') continue
-    const slug = file.replace(/\.models\.js$/, '').replace(/\.js$/, '')
-    if (providerSlugs.has(slug) && !PI_AI_KEEP_PROVIDERS.has(slug)) removeFile(join(providersDir, file))
-  }
-  const dataDir = join(providersDir, 'data')
-  for (const file of readdirSync(dataDir)) {
-    if (file === '.manifest.json') continue
-    const slug = file.replace(/\.json$/, '')
-    if (providerSlugs.has(slug) && !PI_AI_KEEP_PROVIDERS.has(slug)) removeFile(join(dataDir, file))
-  }
-  for (const file of PI_AI_DROPPED_API_IMPLS) {
-    removeFile(join(dist, 'api', file))
-  }
-  for (const scope of ['@aws-sdk', '@smithy', '@aws-crypto']) {
-    const dir = join(modulesRoot, scope)
-    if (!existsSync(dir)) continue
-    removed += readdirSync(dir, { recursive: true }).length
-    rmSync(dir, { recursive: true, force: true })
-  }
-  console.log(`deploy-runtime: pi-ai trimmed to DeepSeek + Xiaomi/MiMo + OpenCode (${removed} entries removed)`)
+  console.log('deploy-runtime: pi-ai provider catalog kept in full (all providers)')
 }
 
 /** MiMo model ids the api.xiaomimimo.com endpoint actually accepts (verified by real calls, 2026-08-14). */
@@ -413,8 +335,15 @@ function restoreOpencodeDeps() {
     const manifest = JSON.parse(readFileSync(join(src, 'package.json'), 'utf8'))
     for (const dep of Object.keys(manifest.dependencies ?? {})) visit(dep)
   }
-  visit('@anthropic-ai/sdk')
-  visit('@google/genai')
+  // Restore every runtime dependency pi-ai needs for the full provider catalog
+  // (Anthropic, Google, Bedrock/AWS, Mistral, OpenAI, ...), not just the OpenCode
+  // pair. pnpm deploy may drop optional/peer packages a provider lazily imports;
+  // walk pi-ai declared dependencies and copy any missing one from the store.
+  const piAiSrc = findInStore("@earendil-works/pi-ai")
+  if (piAiSrc !== undefined) {
+    const piManifest = JSON.parse(readFileSync(join(piAiSrc, 'package.json'), 'utf8'))
+    for (const dep of Object.keys(piManifest.dependencies ?? {})) visit(dep)
+  }
   if (copied.length > 0) {
     console.log('deploy-runtime: restored opencode deps (' + copied.join(', ') + ')')
   }
