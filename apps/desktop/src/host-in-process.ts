@@ -169,7 +169,9 @@ export async function startHostInProcess(options: {
   const { runtimeRoot, home, onExit } = options
   const overlayPath = options.overlayPath ?? browsePickerOverlayPath()
   const port = options.port ?? await pickLoopbackPort()
-  const webArgs = ['--port', String(port)]
+  // The in-process host runs inside Electron (its own GUI window); never
+  // spawn the browser opener — it would launch a second Electron app.
+  const webArgs = ['--port', String(port), '--no-open']
   const embedPath = entry(runtimeRoot, '@deepseek-ai', 'dsh', 'lib', 'embed.js')
   if (!existsSync(embedPath)) {
     throw new Error(`dsh-desktop: in-process runtime not deployed (${runtimeRoot}); deploy it before running`)

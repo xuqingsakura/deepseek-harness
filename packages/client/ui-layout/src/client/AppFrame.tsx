@@ -20,7 +20,7 @@ import css from './AppFrame.module.css'
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'workbench.viewer' | 'workbench.bottom' | 'shell.overlay'>
+  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'workbench.viewer' | 'workbench.bottom' | 'shell.overlay' | 'workspace.shell'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
 
 
@@ -138,6 +138,23 @@ export function AppFrame({
   actions,
   renderSlot,
 }: AppFrameProps) {
+  // Detached workspace window (?dshWindow=workspace): the whole window is
+  // owned by a workspace plugin (e.g. dsh-workspace) through the
+  // 'workspace.shell' seat. The three-column frame is skipped entirely; the
+  // owner receives the conversation render bridge so it can place the
+  // original conversation (ui-conversation's ConversationRoot) in its own
+  // layout. A missing occupant renders a quiet fallback instead of a blank
+  // shell (the plugin installs lazily and may be absent in a bare web host).
+  const workspaceWindow = new URLSearchParams(window.location.search).get('dshWindow') === 'workspace'
+  if (workspaceWindow) {
+    return (
+      <div className={css.workspaceShell}>
+        {renderSlot('workspace.shell', {
+          renderConversation: () => renderSlot('conversation', {}),
+        })}
+      </div>
+    )
+  }
   const panels = useStore(s => s)
   const detailsSession = useSessions((s) => {
     const current = s.current

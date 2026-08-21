@@ -173,6 +173,13 @@ const bridge: DesktopBridge = {
 
 contextBridge.exposeInMainWorld('dshDesktop', bridge)
 
+/** Title-bar caption: the detached workspace window names itself, the main window stays branded. */
+function titleBarText(): string {
+  return new URLSearchParams(window.location.search).get('dshWindow') === 'workspace'
+    ? 'DeepSeek Harness 工作台'
+    : 'DeepSeek Harness'
+}
+
 /** Mount the title bar and reserve its strip once the document exists. */
 function mountTitleBar(): void {
   const host = document.createElement('div')
@@ -195,7 +202,7 @@ function mountTitleBar(): void {
   ].join('; ')
   host.innerHTML = [
     `<span id="dsh-titlebar-icon" style="display: flex; height: 100%; align-items: center; padding-left: 12px;">${FAVICON_MARK}</span>`,
-    `<span id="dsh-titlebar-title" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 12px; line-height: ${TITLEBAR_HEIGHT}px; letter-spacing: 0.02em; white-space: nowrap; pointer-events: none;">DeepSeek Harness</span>`,
+    `<span id="dsh-titlebar-title" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 12px; line-height: ${TITLEBAR_HEIGHT}px; letter-spacing: 0.02em; white-space: nowrap; pointer-events: none;">${titleBarText()}</span>`,
     '<div id="dsh-titlebar-controls" style="display: flex; height: 100%; margin-left: auto; -webkit-app-region: no-drag;">',
     `  <button id="dsh-btn-min" title="最小化">${MINIMIZE_ICON}</button>`,
     `  <button id="dsh-btn-max" title="最大化">${MAXIMIZE_ICON}</button>`,

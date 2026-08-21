@@ -7,6 +7,7 @@
  * with the runtime sessions service. A second effect seats the theme
  * presenter, which projects ctx.theme snapshots onto document.body.
  */
+import type { ReactNode } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { PanelActions } from './service.ts'
@@ -103,6 +104,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `id` is added beside the shipped entries instead of replacing them.
      */
     'shell.overlay': { kind: 'list'; scope: 'root' }
+    /**
+     * The detached workspace window shell, rendered instead of the three
+     * columns while the web UI boots in workspace-window mode
+     * (?dshWindow=workspace). OCCUPIED by a workspace plugin (e.g.
+     * dsh-workspace) that owns the whole window layout. The owner receives a
+     * renderConversation bridge so it can place the original conversation
+     * (ui-conversation's ConversationRoot) anywhere in its own layout.
+     */
+    'workspace.shell': { kind: 'single'; scope: 'root'; owner: WorkspaceShellOwnerProps }
   }
 }
 
@@ -137,6 +147,15 @@ export interface WorkbenchBottomOwnerProps {
   height: number
 }
 
+/** Workspace shell owner share: the conversation render bridge for the detached window. */
+export interface WorkspaceShellOwnerProps {
+  /**
+   * Render the original conversation (ui-conversation's ConversationRoot)
+   * into the caller's own layout. Safe to call at most once per render.
+   */
+  renderConversation(): ReactNode
+}
+
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
 export const inject = ['slots', 'theme']
@@ -160,6 +179,7 @@ export function apply(ctx: ClientContext): void {
         'workbench.viewer': { kind: 'single', scope: 'root' },
         'workbench.bottom': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
+        'workspace.shell': { kind: 'single', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
       // entry and delivers useStore/actions to AppFrame as standard props.

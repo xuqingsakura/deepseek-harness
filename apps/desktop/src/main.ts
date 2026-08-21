@@ -394,16 +394,21 @@ function createMainWindow(url: string | undefined, onClosed: () => void): Browse
 let workbenchWindow: BrowserWindow | undefined
 
 /**
- * Open (or focus) a detached workbench window bound to one session. The
- * window loads the same host origin with `?dshWindow=workbench&session=`, so
- * the web UI boots straight into the three-column file workbench; the shared
- * in-process host and the same-origin localStorage make the two windows
- * interoperate without extra state channels.
- * @param sessionId - the session to open in the workbench; absent keeps the
+ * Open (or focus) the detached workspace window bound to one session
+ * (VSCode-style workbench mode). The window loads the same host origin with
+ * `?dshWindow=workspace&session=`, so the web UI boots straight into the
+ * dsh-workspace plugin's own full-window layout; the shared in-process host
+ * and the same-origin localStorage make the two windows interoperate.
+ *
+ * Entering workspace mode hides the main window (the user works inside the
+ * detached window); closing it restores the main window. Session switching
+ * stays shared: both windows observe the same live sessions service.
+ *
+ * @param sessionId - the session to open in the workspace; absent keeps the
  *   URL's own default (the persisted current session).
- * @returns the created (or existing) workbench window.
+ * @returns the created (or existing) workspace window.
  */
-function createWorkbenchWindow(sessionId: string | undefined): BrowserWindow {
+function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
   if (workbenchWindow !== undefined && !workbenchWindow.isDestroyed()) {
     if (!workbenchWindow.isVisible()) workbenchWindow.show()
     workbenchWindow.focus()
@@ -431,17 +436,35 @@ function createWorkbenchWindow(sessionId: string | undefined): BrowserWindow {
   window.once('ready-to-show', () => { window.show() })
   window.on('closed', () => {
     if (workbenchWindow === window) workbenchWindow = undefined
+    // Leaving workspace mode restores the main window.
+    const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
+    if (mainWin !== undefined && !mainWin.isDestroyed() && !mainWin.isVisible()) mainWin.show()
   })
   if (url !== undefined) {
-    url.searchParams.set('dshWindow', 'workbench')
+    url.searchParams.set('dshWindow', 'workspace')
     if (sessionId !== undefined && sessionId !== '') url.searchParams.set('session', sessionId)
     void window.loadURL(url.toString())
   } else {
     void window.loadURL(splashDataUrl(harnessHome()))
   }
+  // Keep the custom title bar's maximize/restore glyph in sync with the real
+  // window state (the shared preload listens for dsh:maximized).
+  window.webContents.on('did-finish-load', () => {
+    if (!window.isDestroyed()) window.webContents.send('dsh:maximized', window.isMaximized())
+  })
+  const publishWorkspaceMaximized = (): void => {
+    if (!window.isDestroyed()) window.webContents.send('dsh:maximized', window.isMaximized())
+  }
+  window.on('maximize', publishWorkspaceMaximized)
+  window.on('unmaximize', publishWorkspaceMaximized)
+  // Entering workspace mode hides the main window (the detached window is now
+  // the user's active surface).
+  const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
+  if (mainWin !== undefined && !mainWin.isDestroyed() && mainWin !== window) mainWin.hide()
   workbenchWindow = window
   return window
 }
+
 
 
 /** Toggle the shell window between shown/focused and tray-hidden. */
@@ -750,9 +773,9 @@ if (GEN_ICON_DIR !== undefined) {
     }
   })
 } else {
-  // Detached workbench window (VSCode-style): the web UI reads ?dshWindow=workbench.
+  // Detached workspace window (VSCode-style workbench mode): the web UI reads ?dshWindow=workspace.
   ipcMain.handle('dsh:open-workbench-window', (_event, sessionId: unknown) => {
-    createWorkbenchWindow(typeof sessionId === 'string' ? sessionId : undefined)
+    createWorkspaceWindow(typeof sessionId === 'string' ? sessionId : undefined)
   })
 
   // Custom title bar controls: the preload's buttons reach the owning window here.
