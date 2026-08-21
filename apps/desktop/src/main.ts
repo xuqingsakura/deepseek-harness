@@ -469,6 +469,17 @@ function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
 
 /** Toggle the shell window between shown/focused and tray-hidden. */
 function toggleWindow(window: BrowserWindow | undefined): void {
+  // 工作台模式下，托盘点击应聚焦/切换工作台窗口，避免同时显示主窗口。
+  if (workbenchWindow !== undefined && !workbenchWindow.isDestroyed()) {
+    if (workbenchWindow.isVisible() && !workbenchWindow.isMinimized()) {
+      workbenchWindow.hide()
+    } else {
+      if (workbenchWindow.isMinimized()) workbenchWindow.restore()
+      workbenchWindow.show()
+      workbenchWindow.focus()
+    }
+    return
+  }
   if (window === undefined) return
   if (window.isVisible() && !window.isMinimized()) {
     window.hide()
