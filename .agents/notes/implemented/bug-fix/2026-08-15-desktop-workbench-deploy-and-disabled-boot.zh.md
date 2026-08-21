@@ -2,7 +2,7 @@
 
 Status: implemented
 
-English | [English](2026-08-15-desktop-workbench-deploy-and-disabled-boot.md)
+[English](2026-08-15-desktop-workbench-deploy-and-disabled-boot.md) | 中文
 
 ## Problem
 

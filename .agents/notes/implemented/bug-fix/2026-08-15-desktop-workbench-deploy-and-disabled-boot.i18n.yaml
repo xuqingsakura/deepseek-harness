@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-15-desktop-workbench-deploy-and-disabled-boot.md
 2026-08-15-desktop-workbench-deploy-and-disabled-boot.md: 31b8691008e4cd41fa8ee356b5e974df7cc3c107
-2026-08-15-desktop-workbench-deploy-and-disabled-boot.zh.md: 740edb2a0f932e8b7531211269d3ac6c717ce9c3
+2026-08-15-desktop-workbench-deploy-and-disabled-boot.zh.md: 59479e15962810d7d12663fd5eb5b45f5a7a1ca6

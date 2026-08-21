@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-desktop-workbench-file-tree.md
 2026-08-15-desktop-workbench-file-tree.md: cd9474f7451bc3f72ad9313ca62f9ade8fbb2208
-2026-08-15-desktop-workbench-file-tree.zh.md: 7e3329b241df013532d2e15d8d70aa9c095be629
+2026-08-15-desktop-workbench-file-tree.zh.md: ba7436da462292343b4c26ae2098d47c0cf9cdcf
