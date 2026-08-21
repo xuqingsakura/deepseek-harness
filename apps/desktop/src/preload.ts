@@ -74,6 +74,8 @@ export interface DesktopBridge {
   migrateWebData(options?: MigrateOptions): Promise<MigrationReport>
   /** Open (or focus) a detached VSCode-style workbench window for one session. */
   openWorkbenchWindow(sessionId?: string): Promise<unknown>
+  /** 工作台窗口「回到原桌面」：显示主窗口并关闭工作台窗口。 */
+  leaveWorkbench(): Promise<unknown>
 }
 
 declare global {
@@ -128,6 +130,7 @@ const bridge: DesktopBridge = {
   migrateWebData: (options?: MigrateOptions) => ipcRenderer.invoke('dsh:migrate-web-data', options ?? {}) as Promise<MigrationReport>,
   /** Open (or focus) a detached VSCode-style workbench window for one session. */
   openWorkbenchWindow: (sessionId?: string) => ipcRenderer.invoke('dsh:open-workbench-window', sessionId),
+  leaveWorkbench: () => ipcRenderer.invoke('dsh:leave-workbench'),
   onUpdateState: (callback: (state: DesktopUpdateState) => void) => {
     const listener = (_event: IpcRendererEvent, state: DesktopUpdateState): void =>{  callback(state) }
     ipcRenderer.on('dsh:update-state', listener)

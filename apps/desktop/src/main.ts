@@ -434,6 +434,13 @@ function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
     },
   })
   window.once('ready-to-show', () => { window.show() })
+  // 工作台窗口点 X：隐藏到系统托盘（不关闭、不恢复主窗口）。真正退出用「回到原桌面」按钮。
+  window.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault()
+      window.hide()
+    }
+  })
   window.on('closed', () => {
     if (workbenchWindow === window) workbenchWindow = undefined
     // Leaving workspace mode restores the main window.
@@ -787,6 +794,17 @@ if (GEN_ICON_DIR !== undefined) {
   // Detached workspace window (VSCode-style workbench mode): the web UI reads ?dshWindow=workspace.
   ipcMain.handle('dsh:open-workbench-window', (_event, sessionId: unknown) => {
     createWorkspaceWindow(typeof sessionId === 'string' ? sessionId : undefined)
+  })
+
+  // 工作台窗口「回到原桌面」：显示主窗口并强制关闭工作台窗口。
+  ipcMain.handle('dsh:leave-workbench', () => {
+    const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
+    if (mainWin !== undefined && !mainWin.isDestroyed()) {
+      if (mainWin.isMinimized()) mainWin.restore()
+      mainWin.show()
+      mainWin.focus()
+    }
+    workbenchWindow?.destroy()
   })
 
   // Custom title bar controls: the preload's buttons reach the owning window here.
