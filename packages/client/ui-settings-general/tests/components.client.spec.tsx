@@ -16,7 +16,6 @@ function derivedDocumentStore(api: object) {
   return new SettingsDocumentStore(wire, new SettingsDescribeMirror(wire))
 }
 import { en } from '../src/client/locales.ts'
-import { MigrateDataRow } from '../src/client/MigrateDataRow.tsx'
 
 afterEach(cleanup)
 
@@ -157,40 +156,5 @@ describe('SettingsDocumentAction', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
     expect((await screen.findByRole('alert')).textContent).toBe('Could not open configuration file')
     expect(screen.getByRole('button', { name: 'Open configuration file' })).toBeTruthy()
-  })
-})
-
-describe('MigrateDataRow', () => {
-  it('renders null outside the desktop shell (no window.dshDesktop)', () => {
-    const { container } = render(<MigrateDataRow t={t} />)
-    expect(container.firstChild).toBeNull()
-  })
-
-  it('renders the migration form and runs a dry-run through the desktop bridge', async () => {
-    const report = {
-      source: 'C:\\Users\\test\\.dsh',
-      target: 'C:\\Users\\test\\desktop-home',
-      dryRun: true,
-      steps: [],
-      sessionsCopied: 1,
-      sessionsSkipped: 0,
-      storagesMerged: 0,
-      errors: [],
-    }
-    const migrateWebData = vi.fn().mockResolvedValue(report)
-    ;(window as unknown as { dshDesktop?: { migrateWebData: typeof migrateWebData } }).dshDesktop = { migrateWebData }
-    try {
-      const { container } = render(<MigrateDataRow t={t} />)
-      expect(screen.getByText('Data migration')).toBeTruthy()
-      fireEvent.click(screen.getByText('Dry run'))
-      await waitFor(() => {
-        expect(migrateWebData).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }))
-      })
-      await waitFor(() => {
-        expect(container.querySelector('[data-testid="migrate-report"]')?.textContent).toContain('1')
-      })
-    } finally {
-      delete (window as unknown as { dshDesktop?: unknown }).dshDesktop
-    }
   })
 })

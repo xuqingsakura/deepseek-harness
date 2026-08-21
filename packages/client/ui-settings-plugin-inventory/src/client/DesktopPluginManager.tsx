@@ -17,14 +17,6 @@ import type { PluginInventorySnapshot } from '@deepseek-ai/dsh-api-remotes/clien
 import type { PluginInventorySettingsTabProps } from './PluginInventorySettingsTab.tsx'
 import css from './DesktopPluginManager.module.css'
 
-/** Minimal face of the desktop bridge's plugin surface (preload exposes the rest). */
-interface BuiltinPluginInfo {
-  name: string
-  version: string | undefined
-  description: string | undefined
-  dir: string
-}
-
 interface DesktopPluginBridge {
   pluginAdd(spec: string): Promise<PluginOpResult>
   pluginRemove(name: string): Promise<PluginOpResult>
@@ -35,8 +27,6 @@ interface DesktopPluginBridge {
   pluginAuthorizeBuilds(keys: string[]): Promise<{ path: string }>
   pluginSetEnabled(name: string, enabled: boolean): Promise<{ ok: boolean; bundles: string[]; enabled: boolean; liveApplied: boolean }>
   pluginOutdated(): Promise<Record<string, string>>
-  pluginBuiltinList(): Promise<BuiltinPluginInfo[]>
-  pluginInstallBuiltin(name: string): Promise<PluginOpResult>
 }
 
 interface PluginOpResult {
@@ -97,8 +87,6 @@ export function DesktopPluginManager({ t, entries, onChanged }: DesktopPluginMan
   const [op, setOp] = useState<OpState>({ status: 'idle' })
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [confirmBatch, setConfirmBatch] = useState(false)
-  const [builtins, setBuiltins] = useState<BuiltinPluginInfo[]>([])
-  const [installingBuiltin, setInstallingBuiltin] = useState<string | null>(null)
 
   const entryByModule = useMemo(() => {
     const map = new Map<string, PluginInventoryEntry>()
@@ -120,7 +108,6 @@ export function DesktopPluginManager({ t, entries, onChanged }: DesktopPluginMan
   useEffect(refreshOutdated, [refreshOutdated])
   useEffect(() => {
     if (bridge === undefined) return
-    void bridge.pluginBuiltinList().then(setBuiltins, () =>{  setBuiltins([]) })
   }, [bridge])
 
   const run = async (
@@ -222,28 +209,6 @@ export function DesktopPluginManager({ t, entries, onChanged }: DesktopPluginMan
     }
   }
 
-  const installBuiltin = async (name: string): Promise<void> => {
-    const target = window.dshDesktop as DesktopPluginBridge | undefined
-    if (target === undefined || installingBuiltin !== null) return
-    setInstallingBuiltin(name)
-    setOp({ status: 'busy' })
-    try {
-      const result = await target.pluginInstallBuiltin(name)
-      reload()
-      refreshOutdated()
-      onChanged?.()
-      setOp({
-        status: 'done',
-        ok: result.ok,
-        message: result.ok ? t('builtinInstalledRestart') : `${t('opFailed')} (exit ${String(result.exitCode)})`,
-      })
-    } catch (error) {
-      setOp({ status: 'done', ok: false, message: String(error) })
-    } finally {
-      setInstallingBuiltin(null)
-    }
-  }
-
   const isGitSpec = /^(github:|git\+|https?:\/\/)/.test(spec.trim())
   const busy = op.status === 'busy'
   const sourceLabel = (source: DesktopPluginInfo['source']): string => (
@@ -264,38 +229,6 @@ export function DesktopPluginManager({ t, entries, onChanged }: DesktopPluginMan
       <h3 className={css.heading}>{t('desktopHeading')}</h3>
       <p className={css.hint}>{t('desktopHint')}</p>
       <p className={css.hint}>{t('externalHint')}</p>
-      {builtins.length > 0 ? (
-        <div className={css.builtins} data-builtin-plugins>
-          <h4 className={css.builtinHeading}>{t('builtinHeading')}</h4>
-          <p className={css.hint}>{t('builtinHint')}</p>
-          <ul className={css.builtinList}>
-            {builtins.map((plugin) => {
-              const installed = plugins.some(item => item.name === plugin.name)
-              return (
-                <li className={css.builtinItem} key={plugin.name}>
-                  <div className={css.builtinBody}>
-                    <span className={css.itemName}><code>{plugin.name}</code></span>
-                    <span className={css.itemMeta}>
-                      {plugin.version !== undefined ? <span className={css.version}>{plugin.version}</span> : null}
-                    </span>
-                    {plugin.description !== undefined ? (
-                      <span className={css.builtinDescription}>{plugin.description}</span>
-                    ) : null}
-                  </div>
-                  <button
-                    className={css.action}
-                    type="button"
-                    disabled={installed || installingBuiltin !== null}
-                    onClick={() => { void installBuiltin(plugin.name) }}
-                  >
-                    {installed ? t('builtinInstalled') : installingBuiltin === plugin.name ? t('builtinInstalling') : t('builtinInstall')}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      ) : null}
       <div className={css.form}>
         <label className={css.visuallyHidden} htmlFor="dsh-desktop-plugin-spec">{t('specLabel')}</label>
         <input

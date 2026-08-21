@@ -2,7 +2,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PluginInventorySettingsTab } from '../src/client/PluginInventorySettingsTab.tsx'
-import { DesktopPluginManager } from '../src/client/DesktopPluginManager.tsx'
 import type {
   PluginInventorySettingsTabInjected,
   PluginInventorySettingsTabProps,
@@ -32,29 +31,6 @@ const SNAPSHOT = {
     { entryId: 'disabled-entry', moduleName: '@deepseek-ai/dsh-host-directory-picker-native', enabled: false, fiberPhase: null },
   ],
 } as unknown as Snapshot
-
-describe('DesktopPluginManager builtin plugins', () => {
-  it('lists bundled plugins and installs one on click', async () => {
-    const install = vi.fn(() => Promise.resolve({
-      ok: true, exitCode: 0, output: '', bundles: ['dsh-workbench'], allowBuilds: [],
-    }))
-    ;(globalThis as { dshDesktop?: unknown }).dshDesktop = {
-      pluginList: vi.fn(() => Promise.resolve([])),
-      pluginOutdated: vi.fn(() => Promise.resolve({})),
-      pluginBuiltinList: vi.fn(() => Promise.resolve([
-        { name: 'dsh-workbench', version: '0.1.0', description: 'Workbench plugin', dir: 'C:/x' },
-      ])),
-      pluginInstallBuiltin: install,
-    }
-    render(<DesktopPluginManager t={t} />)
-    await waitFor(() => { expect(screen.getByText(en.builtinHeading)).toBeTruthy() })
-    expect(screen.getByText('dsh-workbench')).toBeTruthy()
-    const button = screen.getByRole('button', { name: en.builtinInstall })
-    fireEvent.click(button)
-    await waitFor(() => { expect(install).toHaveBeenCalledWith('dsh-workbench') })
-    delete (globalThis as { dshDesktop?: unknown }).dshDesktop
-  })
-})
 
 describe('PluginInventorySettingsTab', () => {
   it('renders runtime status only for enabled plugins', async () => {
