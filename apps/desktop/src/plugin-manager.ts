@@ -10,6 +10,7 @@
  * @module @deepseek-ai/dsh-desktop/plugin-manager
  */
 
+import { app } from 'electron'
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -22,14 +23,14 @@ const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
 
 /** The runtime closure root: dev uses the deployed copy, packaged uses resources. */
 function closureRoot(): string {
-  return process.resourcesPath
+  return app.isPackaged
     ? join(process.resourcesPath, 'runtime', 'host-deploy')
     : join(APP_ROOT, 'out', 'runtime', 'host-deploy')
 }
 
 /** Absolute path of the vendored pnpm executable. */
 function pnpmExecutable(): string {
-  return process.resourcesPath
+  return app.isPackaged
     ? join(process.resourcesPath, 'pnpm', 'pnpm.exe')
     : join(APP_ROOT, 'runtime', 'pnpm', 'pnpm.exe')
 }
@@ -138,7 +139,6 @@ function assertSafePluginHome(home: string): void {
     }
   }
 }
-
 
 /** Proxy settings applied to the plugin installer's pnpm and git subprocesses. */
 interface PluginProxyConfig {
@@ -608,7 +608,6 @@ export async function listPlugins(home: string): Promise<DesktopPluginInfo[]> {
   }
   return infos
 }
-
 
 /** The profile pnpm settings that out-of-tree plugins need (mirrors app-boot's initProfile). */
 const DEFAULT_PNPM_WORKSPACE = [

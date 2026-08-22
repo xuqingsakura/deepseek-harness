@@ -1,7 +1,0 @@
-# Aurora skin bundle patch: one insert over the dsh-base/web-app layers. The
-# row mounts this package as a host entry; its `dsh.client` declaration makes
-# the browser half (lib/client.js) part of the Web roster, where it stacks
-# token overrides through the official ctx.theme.overrideTokens seam.
-- insert:
-    - id: skin-aurora
-      name: dsh-skin-aurora
