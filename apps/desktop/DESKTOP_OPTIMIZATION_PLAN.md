@@ -2,7 +2,7 @@
 
 > 本计划把「桌面端整体完善」与「皮肤插件（图片背景 + 自定义主题）」整合为一份可执行的路线图，并做多方位审查：
 > 架构 / 性能(CPU·内存·渲染) / 代码规范与可维护性 / 中文注释 / 安全 / 测试 / 文档。
-> 状态：**2026-08-23 已执行一轮 P0→P2 桌面端优化（见文末「9. 本轮执行记录」）**。先前 Phase 0/2 的地基类项目已落地；皮肤插件（Phase 1）按用户决定暂缓；P2-9/P2-10 待后续。
+> 状态：**2026-08-23 已完成两轮桌面端优化（第一轮 P0→P2 地基，第二轮 P0-A/B、P2-B、P1-C、P2-A、P1-B），全部见文末「9. 本轮执行记录」**。皮肤插件（Phase 1）按用户决定暂缓，恢复时间待定。
 
 ---
 
@@ -218,10 +218,41 @@ Phase 2(性能监控/清理/中文注释) — 收尾
 ### P2-8 清理 dsh-workbench
 - 删除 `apps/desktop/plugins/dsh-workbench/`，并从 `electron-builder.yml` 移除打包引用。
 
+### P0-A 宿主默认子进程 + 设置项 + 打包内置 node.exe（第二轮）
+- host-mode 默认改为 `child`（进程内仍可切回）；新增 `dsh:set-host-mode` IPC + preload `setHostMode`。
+- 设置→关于 新增「代理后端」项（进程内/子进程），切换写 `host-mode.json`，重启生效。
+- `package.mjs` 打包前把当前 Node ABI 的 `node.exe` 拷到 `runtime/node.exe`，electron-builder 内置 `resources/runtime/node.exe`，使打包版 child 宿主可用。
+
+### P0-B 启动链路打点
+- `main.ts` 增加 `boot:app-ready / port-picked / host-started / host-ready / splash-exit` 各阶段 +耗时（debugLog），用于定位启动耗时。
+
+### P2-B 诊断/日志入口
+- 新增 `dsh:get-diagnostics` / `dsh:open-log-file` IPC + preload `getDiagnostics`/`openLogFile`；设置→关于 增加「诊断」区（版本/代理后端/插件数/日志路径 + 打开日志文件）。
+
+### P1-C 渲染层沙箱加固
+- preload 用 esbuild 打成单文件 CJS（`scripts/bundle-preload.mjs` → `lib/preload.cjs`，electron external、图标内联）；`windows.ts` 两窗口恢复 `sandbox: true`；`build` 脚本串联 bundle 步骤。
+
+### P2-A 启动/崩溃安全恢复
+- 新增 `src/main/recovery.ts`：启动成功清零/失败累加；上次失败下次自动进安全模式（禁非基础插件，保留 base/web-app）；诊断区「安全模式重启」。
+- `plugin-manager.disableNonBasePlugins(home)`；IPC `dsh:relaunch-safe` + preload `relaunchSafe`。
+
+### P1-B 插件操作取消
+- `plugin-manager` 追踪 pnpm 子进程，暴露 `cancelPluginOp()`；IPC `dsh:plugin-cancel` + preload `pluginCancel`；诊断区「取消插件操作」（有无运行的反馈文案）。
+
+### 测试与文档
+- 新增 `host-mode.spec.ts` / `window-state.spec.ts` / `recovery.spec.ts`；桌面单测 **4 文件 / 22 用例全通过**。
+- `DESKTOP_GUI_TEST.md`：A 组注明沙箱回归；C 组默认改 child；新增 G1–G10 用例。
+
 ### 暂缓 / 待后续
-- P1-4 渲染节点 LRU：现有窗口化 + height 缓存裁剪 + 渲染采样已覆盖；节点 store 加 LRU 会冒渲染回归风险。
-- P2-9 preload 标题栏重构：需 GUI 验证 ESM preload 相对 import。
-- P2-10 补单测：需先搭 Electron mock 测试基建。
+- 皮肤插件 M1–M4（用户决定暂缓，恢复时间待定）。
+- P2-9 已完成（preload 图标抽取 `preload-icons.ts`）；P2-10 已完成（单测落地）。
+- P1-A 渲染节点 LRU：经排查会话节点均为 per-session 作用域 + dispose 清理，窗口化 + height 裁剪 + 渲染采样已覆盖，无跨会话无界缓存，故未做侵入式改动。
+- P1-B 插件「进度条」：当前为取消能力 + 诊断区入口；精确 pnpm 进度需专门解析器，待后续。
+
+### 需要用户 GUI 实测（两轮合并）
+- 标题栏 A1–A9（沙箱下重点：三按钮 / 双击最大化 / 深色鲸鱼）。
+- 工作台 B4–B7；宿主模式 C1–C3（默认 child）；插件 D1–D5。
+- 设置→关于 G1–G5（代理后端 / 诊断 / 启动打点）；G6（沙箱整体）；G7–G8（安全模式）；G9–G10（插件取消）。
 
 ### 需要用户 GUI 实测
 - 标题栏三按钮 / 双击最大化 / 深色主题鲸鱼颜色。
