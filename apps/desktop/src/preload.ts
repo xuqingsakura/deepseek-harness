@@ -35,6 +35,7 @@ export interface DesktopBridge {
   platform: string
   windowControl(action: WindowControlAction): void
   getWindowState(): Promise<{ maximized: boolean }>
+  getHostMode(): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
   onMaximized(callback: (maximized: boolean) => void): () => void
   apiFetch(request: { url: string; method: string; headers: Record<string, string>; body?: string }): Promise<{
     status: number
@@ -105,6 +106,7 @@ const bridge: DesktopBridge = {
     ipcRenderer.send('dsh:window-control', action)
   },
   getWindowState: (): Promise<{ maximized: boolean }> => ipcRenderer.invoke('dsh:window-state'),
+  getHostMode: () => ipcRenderer.invoke('dsh:get-host-mode'),
   onMaximized: (callback: (maximized: boolean) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, maximized: boolean): void =>{  callback(maximized) }
     ipcRenderer.on('dsh:maximized', listener)

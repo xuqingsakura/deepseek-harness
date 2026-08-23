@@ -11,7 +11,7 @@
  */
 
 import { app } from 'electron'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -231,19 +231,24 @@ function ensureNpmrc(dir: string, proxy: PluginProxyConfig): void {
 }
 
 /** Run vendored pnpm in the profile directory, capturing output. */
-function runPnpm(dir: string, args: readonly string[], proxy: PluginProxyConfig): { status: number | null; output: string } {
-  const result = spawnSync(pnpmExecutable(), [...args], {
-    cwd: dir,
-    encoding: 'utf8',
-    maxBuffer: 32 * 1024 * 1024,
-    windowsHide: true,
-    env: pnpmEnv(proxy),
+function runPnpm(dir: string, args: readonly string[], proxy: PluginProxyConfig): Promise<{ status: number | null; output: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(pnpmExecutable(), [...args], {
+      cwd: dir,
+      windowsHide: true,
+      env: pnpmEnv(proxy),
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => { stdout += String(chunk) })
+    child.stderr.on('data', (chunk) => { stderr += String(chunk) })
+    child.on('error', (error) => {
+      reject(new Error(`pnpm failed to start: ${String(error.message)}`))
+    })
+    child.on('close', (code) => {
+      resolve({ status: code, output: stdout + stderr })
+    })
   })
-  const output = [result.stdout, result.stderr].filter((part): part is string => typeof part === 'string').join('')
-  if (result.error !== undefined) {
-    throw new Error(`pnpm failed to start: ${String(result.error)}`)
-  }
-  return { status: result.status, output }
 }
 
 /** Strip ANSI color escapes pnpm may emit even when stdout is a pipe. */
@@ -335,18 +340,47 @@ async function ensureProfile(home: string, proxy: PluginProxyConfig): Promise<st
 }
 
 /**
- * Install a plugin by pnpm spec (registry name@version, absolute path, or
- * file:/link: absolute path). Relative paths are intentionally not anchored:
- * the UI resolves local packages to absolute paths before calling.
+ * 启用本次安装新增的 bundle 插件（P1-7 防御性修复）。
+ *
+ * pnpm add 后的官方 reconcile 可能为了安全把新插件加入 disabled 作为默认，
+ * 让用户误以为“装完就不能用”。此函数把本次新增且声明了 bundle patch 的依赖
+ * 从 disabled 移除并确保出现在 bundles 里，使“安装即启用”符合直觉。
+ * 已有（update/移除再装）且被用户手动停用的插件不受影响，因为只处理新出现的依赖名。
  */
+async function enableNewBundles(before: ProfileManifest, profileDir: string): Promise<void> {
+  const api = await appBoot()
+  const manifest = api.readProfileManifest('dsh-desktop', profileDir)
+  const beforeDeps = new Set(Object.keys(before.dependencies ?? {}))
+  const deps = Object.keys(manifest.dependencies ?? {})
+  const bundles = [...(manifest.dsh?.profile?.bundles ?? [])]
+  const disabled = new Set(manifest.dsh?.profile?.disabled ?? [])
+  let changed = false
+  for (const name of deps) {
+    if (beforeDeps.has(name)) continue
+    if (!exportsPatch(api, name, profileDir)) continue
+    if (!bundles.includes(name)) { bundles.push(name); changed = true }
+    if (disabled.has(name)) { disabled.delete(name); changed = true }
+  }
+  if (!changed) return
+  const profile = { ...manifest.dsh?.profile, bundles }
+  if (disabled.size > 0) profile.disabled = [...disabled]
+  else delete profile.disabled
+  manifest.dsh = { ...manifest.dsh, profile }
+  api.writeProfileManifest(profileDir, manifest)
+}
+
 export async function installPlugin(home: string, spec: string): Promise<PluginManagerResult> {
   assertSafePluginHome(home)
   const proxy = resolveProxyConfig()
   const dir = await ensureProfile(home, proxy)
   const api = await appBoot()
   const before = api.readProfileManifest('dsh-desktop', dir)
-  const { status, output } = runPnpm(dir, ['add', spec], proxy)
-  if (status === 0) await reconcilePlugins(before, dir)
+  const { status, output } = await runPnpm(dir, ['add', spec], proxy)
+  if (status === 0) {
+    await reconcilePlugins(before, dir)
+    // P1-7：安装即启用，避免新装 bundle 默认被官方 reconcile 置为禁用。
+    await enableNewBundles(before, dir)
+  }
   const after = api.readProfileManifest('dsh-desktop', dir)
   return {
     ok: status === 0,
@@ -427,7 +461,7 @@ export async function removePlugin(home: string, name: string): Promise<PluginMa
   const dir = await ensureProfile(home, proxy)
   const api = await appBoot()
   const before = api.readProfileManifest('dsh-desktop', dir)
-  const { status, output } = runPnpm(dir, ['remove', name], proxy)
+  const { status, output } = await runPnpm(dir, ['remove', name], proxy)
   if (status === 0) await reconcilePlugins(before, dir)
   const after = api.readProfileManifest('dsh-desktop', dir)
   return {
@@ -446,7 +480,7 @@ export async function updatePlugin(home: string, name: string): Promise<PluginMa
   const dir = await ensureProfile(home, proxy)
   const api = await appBoot()
   const before = api.readProfileManifest('dsh-desktop', dir)
-  const { status, output } = runPnpm(dir, ['update', name], proxy)
+  const { status, output } = await runPnpm(dir, ['update', name], proxy)
   if (status === 0) await reconcilePlugins(before, dir)
   const after = api.readProfileManifest('dsh-desktop', dir)
   return {
@@ -465,7 +499,7 @@ export async function updateAllPlugins(home: string): Promise<PluginManagerResul
   const dir = await ensureProfile(home, proxy)
   const api = await appBoot()
   const before = api.readProfileManifest('dsh-desktop', dir)
-  const { status, output } = runPnpm(dir, ['update'], proxy)
+  const { status, output } = await runPnpm(dir, ['update'], proxy)
   if (status === 0) await reconcilePlugins(before, dir)
   const after = api.readProfileManifest('dsh-desktop', dir)
   return {
@@ -485,7 +519,7 @@ export async function removePlugins(home: string, names: readonly string[]): Pro
   const dir = await ensureProfile(home, proxy)
   const api = await appBoot()
   const before = api.readProfileManifest('dsh-desktop', dir)
-  const { status, output } = runPnpm(dir, ['remove', ...names], proxy)
+  const { status, output } = await runPnpm(dir, ['remove', ...names], proxy)
   if (status === 0) await reconcilePlugins(before, dir)
   const after = api.readProfileManifest('dsh-desktop', dir)
   return {
@@ -552,7 +586,7 @@ export async function checkOutdated(home: string): Promise<Record<string, string
   assertSafePluginHome(home)
   const proxy = resolveProxyConfig()
   const dir = await ensureProfile(home, proxy)
-  const { status, output } = runPnpm(dir, ['outdated', '--format', 'json'], proxy)
+  const { status, output } = await runPnpm(dir, ['outdated', '--format', 'json'], proxy)
   if (status !== 0 && status !== 1) return {}
   const text = stripAnsi(output).trim()
   if (text === '') return {}

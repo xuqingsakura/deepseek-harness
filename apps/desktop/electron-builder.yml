@@ -20,9 +20,6 @@ extraResources:
   # Vendored pnpm (official dsh plugin installer) shipped for Settings → Plugins.
   - from: runtime/pnpm
     to: pnpm
-  # Bundled workbench plugin: installable from Settings → Plugins (local path).
-  - from: plugins/dsh-workbench
-    to: plugins/dsh-workbench
 win:
   icon: assets/icon.ico
   target:

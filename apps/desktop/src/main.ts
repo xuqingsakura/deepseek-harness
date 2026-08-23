@@ -22,21 +22,20 @@
 import { app, BrowserWindow } from 'electron'
 // electron-updater exposes autoUpdater as a lazy CJS getter, so the ESM named
 // import is undefined; take it off the default namespace instead.
-import { existsSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { browsePickerOverlayPath, pickLoopbackPort, startHostInProcess } from './host-in-process.ts'
 import { errorSplashDataUrl } from './splash.ts'
-import { APP_ROOT, APP_ICON, harnessHome } from './main/config.ts'
-import { windowStateFile } from './main/window-state.ts'
+import { APP_ROOT, harnessHome } from './main/config.ts'
 import { generateIconAssets } from './main/icon.ts'
-import { debugLog } from './main/log.ts'
-import { startHost, waitForRender, playSplashExit, SMOKE_TIMEOUT_MS } from './main/host.ts'
+import { debugLog, flushLog } from './main/log.ts'
+import { startHost, playSplashExit } from './main/host.ts'
 import { wireAutoUpdater, configureUpdater, checkForUpdates } from './main/updater.ts'
 import { state } from './main/state.ts'
 import { createTray } from './main/tray.ts'
 import { createMainWindow } from './main/windows.ts'
 import { registerIpc } from './main/ipc.ts'
+import { resolveHostMode, childHostAvailable } from './main/host-mode.ts'
+import { runSmoke } from './main/smoke.ts'
 
 /** The readiness line the web profile prints once its Loader tree settles. */
 /** Create the main window over the host URL. */
@@ -81,6 +80,8 @@ if (GEN_ICON_DIR !== undefined) {
   app.on('before-quit', () => {
     state.quitting = true
     state.host?.kill()
+    // 冲刷日志流，避免退出前缓存日志丢失。
+    flushLog()
   })
 
   app.on('window-all-closed', () => {
@@ -112,7 +113,12 @@ if (GEN_ICON_DIR !== undefined) {
         if (!SMOKE) app.quit()
       }, SMOKE)
       try {
-        if (process.env.DSH_DESKTOP_HOST?.trim() === 'child') {
+        const hostMode = resolveHostMode()
+        const useChild = hostMode === 'child' && childHostAvailable()
+        if (hostMode === 'child' && !useChild) {
+          console.warn('[dsh-desktop] child host requested but unavailable in this build; falling back to in-process')
+        }
+        if (useChild) {
           state.host = startHost(desktopPort, overlayPath, (line) =>{  console.log(`[dsh-host] ${line}`) })
         } else {
           const runtimeRoot = app.isPackaged
@@ -162,84 +168,12 @@ if (GEN_ICON_DIR !== undefined) {
           setTimeout(() =>{  checkForUpdates(false) }, 12_000)
         }
         if (SMOKE) {
-          const children = await waitForRender(window, SMOKE_TIMEOUT_MS)
-          if (children > 0) {
-            const title: string = await window.webContents.executeJavaScript('document.title') as string
-            const chrome = await window.webContents.executeJavaScript(`(() => {
-              const bar = document.getElementById('dsh-titlebar')
-              const title = document.getElementById('dsh-titlebar-title')
-              const icon = document.getElementById('dsh-titlebar-icon')
-              return {
-                titlebar: bar !== null,
-                title: title?.textContent ?? null,
-                titleCentered: bar !== null && title !== null ? (() => {
-                  const barRect = bar.getBoundingClientRect()
-                  const titleRect = title.getBoundingClientRect()
-                  const delta = Math.abs((titleRect.left + titleRect.width / 2) - (barRect.left + barRect.width / 2))
-                  return delta <= 2
-                })() : false,
-                iconSvg: icon?.querySelector('svg') !== null,
-                buttons: ['dsh-btn-min', 'dsh-btn-max', 'dsh-btn-close'].map((id) => document.getElementById(id) !== null),
-                bodyPaddingTop: getComputedStyle(document.body).paddingTop,
-                titlebarBg: bar !== null ? getComputedStyle(bar).backgroundColor : null,
-                bodyBg: getComputedStyle(document.body).backgroundColor,
-              }
-            })()`) as unknown
-            console.log(`DESKTOP_TITLEBAR ${JSON.stringify(chrome)}`)
-            // Simulate the theme presenter applying the dark palette (root
-            // color-scheme + body attribute + label-primary token) and assert
-            // the title-bar whale turns near-white via currentColor.
-            const darkChrome = await window.webContents.executeJavaScript(`(() => {
-              document.documentElement.style.colorScheme = 'dark'
-              document.body.setAttribute('data-ds-dark-theme', '')
-              document.body.style.setProperty('--dsw-alias-label-primary', '#eef0f3')
-              const path = document.querySelector('#dsh-titlebar-icon path')
-              const bar = document.getElementById('dsh-titlebar')
-              return {
-                scheme: document.documentElement.style.colorScheme,
-                iconFill: path === null ? null : getComputedStyle(path).fill,
-                titlebarColor: bar === null ? null : getComputedStyle(bar).color,
-                titlebarBg: bar === null ? null : getComputedStyle(bar).backgroundColor,
-              }
-            })()`) as unknown
-            console.log(`DESKTOP_TITLEBAR_DARK ${JSON.stringify(darkChrome)}`)
-
-            await window.webContents.executeJavaScript("document.getElementById('dsh-btn-min')?.click()")
-            await new Promise(resolve => setTimeout(resolve, 400))
-            console.log(`DESKTOP_WINDOW_TEST minimized=${String(window.isMinimized())}`)
-            window.restore()
-            await window.webContents.executeJavaScript("document.getElementById('dsh-btn-max')?.click()")
-            await new Promise(resolve => setTimeout(resolve, 900))
-            console.log(`DESKTOP_WINDOW_TEST maximized=${String(window.isMaximized())}`)
-            window.unmaximize()
-            console.log(`DESKTOP_WINDOW_TEST iconAssetExists=${String(existsSync(APP_ICON))}`)
-            console.log(`DESKTOP_TRAY created=${String(state.tray !== undefined)}`)
-            window.setSize(1280, 800)
-            await new Promise(resolve => setTimeout(resolve, 800))
-            console.log(`DESKTOP_WINDOW_STATE saved=${String(existsSync(windowStateFile()))}`)
-            const ipcTest = await window.webContents.executeJavaScript(`(async () => {
-              const bridge = window.dshDesktop
-              if (bridge === undefined) return { bridge: false }
-              const response = await bridge.apiFetch({
-                url: window.location.origin + '/api/host.describe',
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ type: 'client-request', rpcId: 'smoke-ipc', method: 'host.describe', payload: {} }),
-              })
-              return { bridge: true, status: response.status }
-            })()`) as unknown
-            console.log(`DESKTOP_IPC_TEST ${JSON.stringify(ipcTest)}`)
-            console.log(`DESKTOP_PICKER_TEST picker=${state.host.picker ?? 'n/a'}`)
-            await window.webContents.executeJavaScript("window.dshDesktop?.notify({ title: 'dsh-desktop', body: 'notification bridge ok' })")
-            console.log('DESKTOP_NOTIFY sent=true')
-            const screenshotPath = app.isPackaged ? join(app.getPath('userData'), 'smoke.png') : join(APP_ROOT, '.smoke.png')
-            const image = await window.webContents.capturePage()
-            await writeFile(screenshotPath, image.toPNG())
-            console.log(`DESKTOP_SMOKE_OK title=${title} rootChildren=${String(children)} screenshot=${screenshotPath}`)
+          // 自检逻辑抽取到 main/smoke.ts（P1-6）。
+          const ok = await runSmoke(window)
+          if (ok) {
             state.host.kill()
             app.exit(0)
           } else {
-            console.error('DESKTOP_SMOKE_FAIL root did not render')
             state.host.kill()
             app.exit(1)
           }

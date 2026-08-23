@@ -13,8 +13,9 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { harnessHome } from './config.ts'
 import { traceLog } from './log.ts'
+import { hostModeInfo } from './host-mode.ts'
 import { state } from './state.ts'
-import { createWorkspaceWindow } from './windows.ts'
+import { createWorkspaceWindow, restoreMainWindow } from './windows.ts'
 import { getUpdateState, checkForUpdates, quitAndInstall } from './updater.ts'
 import { migrateWebData, type MigrateOptions } from '../migrate-web-data.ts'
 import {
@@ -31,14 +32,15 @@ export function registerIpc(): void {
 
   // 工作台窗口「回到原桌面」：显示主窗口并强制关闭工作台窗口。
   ipcMain.handle('dsh:leave-workbench', () => {
-    const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
-    if (mainWin !== undefined && !mainWin.isDestroyed()) {
-      if (mainWin.isMinimized()) mainWin.restore()
-      mainWin.show()
-      mainWin.focus()
+    // 恢复主窗口（若进入工作台时卸载过渲染器会重载），再关闭工作台窗口。
+    restoreMainWindow()
+    if (state.workbenchWindow !== undefined && !state.workbenchWindow.isDestroyed()) {
+      state.workbenchWindow.destroy()
     }
-    state.workbenchWindow?.destroy()
   })
+
+  // 宿主运行模式诊断：供设置界面展示当前模式与 child 是否可用（只读，生效需重启）。
+  ipcMain.handle('dsh:get-host-mode', () => hostModeInfo())
 
   // Custom title bar controls: the preload's buttons reach the owning window here.
   ipcMain.on('dsh:window-control', (event, action: unknown) => {

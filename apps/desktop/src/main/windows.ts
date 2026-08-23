@@ -10,7 +10,7 @@ import { BrowserWindow, Notification, nativeTheme, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { APP_ICON, PRELOAD, harnessHome } from './config.ts'
 import { debugLog } from './log.ts'
-import { state } from './state.ts'
+import { state, releaseMainRendererInWorkbench } from './state.ts'
 import { splashDataUrl } from '../splash.ts'
 import { loadWindowState, saveWindowState, onVisibleDisplay } from './window-state.ts'
 
@@ -26,6 +26,33 @@ import { loadWindowState, saveWindowState, onVisibleDisplay } from './window-sta
 function initialBackground(): string {
   return nativeTheme.shouldUseDarkColors ? '#0d1117' : '#f6f7f9'
 }
+/** 返回主窗口：优先用 state 引用，其次按 URL 兜底（兼容卸载为 about:blank 后的场景）。 */
+function findMainWindow(): BrowserWindow | undefined {
+  const ref = state.mainWindow
+  if (ref !== undefined && !ref.isDestroyed()) return ref
+  // URL 兜底：挑一个非工作台的 http(s) 窗口。
+  return BrowserWindow.getAllWindows().find(w => !w.isDestroyed()
+    && w !== state.workbenchWindow
+    && /^https?:\/\//.test(w.webContents.getURL()))
+}
+
+/**
+ * 恢复主窗口：显示并聚焦；若进入工作台时卸载过渲染器（当前为 about:blank），
+ * 从记录的地址重载；已显示同一地址时则幂等跳过，避免重复加载导致闪烁。
+ */
+function restoreMainWindow(): void {
+  const mainWin = findMainWindow()
+  if (mainWin === undefined) return
+  if (mainWin.isMinimized()) mainWin.restore()
+  if (!mainWin.isVisible()) mainWin.show()
+  mainWin.focus()
+  const saved = state.mainWindowUrl
+  const current = mainWin.webContents.getURL()
+  if (saved !== undefined && saved !== '' && /^https?:\/\//.test(saved) && current !== saved) {
+    void mainWin.loadURL(saved)
+  }
+}
+
 function createMainWindow(url: string | undefined, onClosed: () => void, isSmoke: boolean): BrowserWindow {
   const saved = loadWindowState()
   const window = new BrowserWindow({
@@ -52,11 +79,17 @@ function createMainWindow(url: string | undefined, onClosed: () => void, isSmoke
       sandbox: false,
     },
   })
+  // 记录主窗口引用，供工作台模式（卸载/恢复）与窗口定位使用。
+  state.mainWindow = window
   window.once('ready-to-show', () => {
     if (saved?.maximized === true) window.maximize()
     window.show()
   })
-  window.on('closed', onClosed)
+  window.on('closed', () => {
+    if (saveTimer !== undefined) clearTimeout(saveTimer)
+    if (state.mainWindow === window) state.mainWindow = undefined
+    onClosed()
+  })
   // Closing the window parks it in the tray instead of quitting; the tray's
   // quit item (or before-quit) is the real exit path.
   window.on('close', (event) => {
@@ -159,7 +192,7 @@ function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
     state.workbenchWindow.focus()
     return state.workbenchWindow
   }
-  const main = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
+  const main = findMainWindow()
   const base = main === undefined ? undefined : main.webContents.getURL()
   const url = base === undefined ? undefined : new URL(base)
   const saved = loadWindowState('window-state-workspace')
@@ -209,10 +242,11 @@ function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
     }
   })
   window.on('closed', () => {
+    if (wsSaveTimer !== undefined) clearTimeout(wsSaveTimer)
     if (state.workbenchWindow === window) state.workbenchWindow = undefined
-    // Leaving workspace mode restores the main window.
-    const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
-    if (mainWin !== undefined && !mainWin.isDestroyed() && !mainWin.isVisible()) mainWin.show()
+    // 离开工作台模式：恢复主窗口（进入时卸载过渲染器会重载）。工作台点 X 只是隐藏，
+    // 只有真正关闭（回到原桌面/退出）才会走到这里。
+    restoreMainWindow()
   })
   if (url !== undefined) {
     url.searchParams.set('dshWindow', 'workspace')
@@ -233,10 +267,17 @@ function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
   window.on('unmaximize', publishWorkspaceMaximized)
   // Entering workspace mode hides the main window (the detached window is now
   // the user's active surface).
-  const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && /^https?:\/\//.test(w.webContents.getURL()))
-  if (mainWin !== undefined && !mainWin.isDestroyed() && mainWin !== window) mainWin.hide()
+  const mainWin = findMainWindow()
+  if (mainWin !== undefined && !mainWin.isDestroyed() && mainWin !== window) {
+    // 记录主窗口地址并隐藏；可选地卸载渲染器释放内存（默认关闭，需 desktop-settings.json 的 releaseMainRenderer=true）。
+    state.mainWindowUrl = mainWin.webContents.getURL()
+    mainWin.hide()
+    if (releaseMainRendererInWorkbench()) {
+      void mainWin.webContents.loadURL('about:blank')
+    }
+  }
   state.workbenchWindow = window
   return window
 }
 
-export { createMainWindow, createWorkspaceWindow }
+export { createMainWindow, createWorkspaceWindow, findMainWindow, restoreMainWindow }
