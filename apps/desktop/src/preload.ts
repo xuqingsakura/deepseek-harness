@@ -73,6 +73,8 @@ export interface DesktopBridge {
   updateInstall(): void
   /** Subscribe to updater-state pushes; returns the unsubscriber. */
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void
+  getDiagnostics(): Promise<{ version: string; host: { mode: 'in-process' | 'child'; childAvailable: boolean }; pluginCount: number; logPath: string }>
+  openLogFile(): Promise<void>
   /** Import Web-harness data (~/.dsh) into the desktop home (safe merge). */
   migrateWebData(options?: MigrateOptions): Promise<MigrationReport>
   /** Open (or focus) a detached VSCode-style workbench window for one session. */
@@ -105,6 +107,8 @@ const bridge: DesktopBridge = {
   getWindowState: (): Promise<{ maximized: boolean }> => ipcRenderer.invoke('dsh:window-state'),
   getHostMode: () => ipcRenderer.invoke('dsh:get-host-mode'),
   setHostMode: (mode: 'in-process' | 'child') => ipcRenderer.invoke('dsh:set-host-mode', mode),
+  getDiagnostics: () => ipcRenderer.invoke('dsh:get-diagnostics'),
+  openLogFile: () => ipcRenderer.invoke('dsh:open-log-file'),
   onMaximized: (callback: (maximized: boolean) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, maximized: boolean): void =>{  callback(maximized) }
     ipcRenderer.on('dsh:maximized', listener)

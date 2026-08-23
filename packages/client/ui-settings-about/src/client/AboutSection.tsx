@@ -43,6 +43,8 @@ interface DesktopUpdateBridge {
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void
   getHostMode(): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
   setHostMode(mode: 'in-process' | 'child'): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
+  getDiagnostics(): Promise<{ version: string; host: { mode: 'in-process' | 'child'; childAvailable: boolean }; pluginCount: number; logPath: string }>
+  openLogFile(): Promise<void>
   migrateWebData(options?: {
     source?: string
     dryRun?: boolean
@@ -159,6 +161,15 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
     }
   }, [desktop, hostBusy, hostMode?.mode])
 
+  // Diagnostics (P2-B): version / host mode / plugin count / log path, plus open-log.
+  const [diagnostics, setDiagnostics] = useState<{ version: string; host: { mode: 'in-process' | 'child'; childAvailable: boolean }; pluginCount: number; logPath: string } | undefined>(undefined)
+  useEffect(() => {
+    if (desktop === undefined) return
+    let alive = true
+    void desktop.getDiagnostics().then((info) => { if (alive) setDiagnostics(info) }).catch(() => {})
+    return () => { alive = false }
+  }, [desktop])
+
   const downloaded = state?.status === 'downloaded'
   const checking = state?.status === 'checking' || busy
   const downloading = state?.status === 'downloading'
@@ -206,6 +217,27 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
           title={hostMode?.childAvailable === false ? t('hostModeUnavailable') : undefined}>
           {hostMode?.mode === 'child' ? `${t('hostModeChild')} ✓` : t('hostModeChild')}
         </button>
+      </div>
+      <div className={css.divider} />
+      <h2 className={css.heading}>{t('diagTitle')}</h2>
+      <div className={css.row}>
+        <span className={css.label}>{t('diagVersion')}</span>
+        <span className={css.value}>{diagnostics?.version ?? t('unknown')}</span>
+      </div>
+      <div className={css.row}>
+        <span className={css.label}>{t('diagHostMode')}</span>
+        <span className={css.value}>{hostMode === undefined ? t('unknown') : (hostMode.mode === 'child' ? t('hostModeChild') : t('hostModeInProcess'))}</span>
+      </div>
+      <div className={css.row}>
+        <span className={css.label}>{t('diagPluginCount')}</span>
+        <span className={css.value}>{diagnostics === undefined ? t('unknown') : String(diagnostics.pluginCount)}</span>
+      </div>
+      <div className={css.row}>
+        <span className={css.label}>{t('diagLogPath')}</span>
+        <span className={css.value}>{diagnostics?.logPath ?? t('unknown')}</span>
+      </div>
+      <div className={css.actions}>
+        <button type="button" className={css.button} onClick={() => void desktop?.openLogFile()}>{t('diagOpenLog')}</button>
       </div>
       <div className={css.divider} />
       <h2 className={css.heading}>{t('migrateTitle')}</h2>

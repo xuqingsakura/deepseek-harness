@@ -101,10 +101,15 @@ if (GEN_ICON_DIR !== undefined) {
     })
 
     void app.whenReady().then(async () => {
+      // P0-B: 启动链路打点，用于定位启动耗时（dev 打到控制台，打包写入日志）。
+      const bootStart = Date.now()
+      const mark = (phase: string): void => debugLog(`[dsh-desktop] boot:${phase} +${Date.now() - bootStart}ms`)
+      mark('app-ready')
       // In-process boot is the default; DSH_DESKTOP_HOST=child keeps the A2
       // subprocess host available as a fallback (e.g. for runtime debugging).
       const home = harnessHome()
       const desktopPort = await pickLoopbackPort()
+      mark('port-picked')
       const overlayPath = browsePickerOverlayPath()
       // Create the window before the host is ready: the splash paints
       // immediately and the host URL replaces it once boot settles. A boot
@@ -142,6 +147,7 @@ if (GEN_ICON_DIR !== undefined) {
           }
           console.log(`[dsh-desktop] host mode: in-process (${inProcess.url})`)
         }
+        mark('host-started')
         // An unexpected host death tears the shell down too; a deliberate quit
         // already killed it in `before-quit`, so `quitting` suppresses this path.
         void state.host.exited.then(() => {
@@ -151,11 +157,13 @@ if (GEN_ICON_DIR !== undefined) {
           }
         })
         const url = await state.host.url
+        mark('host-ready')
         state.hostBaseUrl = url
         debugLog(`host ready at ${url}`)
         console.log(`[dsh-desktop] host ready at ${url}`)
         if (!window.isDestroyed()) {
           await playSplashExit(window)
+          mark('splash-exit')
           if (!window.isDestroyed()) void window.loadURL(url)
         }
         if (!SMOKE) {

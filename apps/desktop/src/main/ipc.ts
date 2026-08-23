@@ -8,9 +8,9 @@
  * @module @deepseek-ai/dsh-desktop/main/ipc
  */
 
-import { app, BrowserWindow, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { harnessHome } from './config.ts'
 import { traceLog } from './log.ts'
 import { hostModeInfo, writeHostMode } from './host-mode.ts'
@@ -47,6 +47,24 @@ export function registerIpc(): void {
     if (mode !== 'child' && mode !== 'in-process') throw new Error('dsh-host-mode: 非法宿主模式')
     writeHostMode(mode)
     return hostModeInfo()
+  })
+
+  // 诊断信息：版本 / 宿主模式 / 已装插件数 / 日志路径（P2-B）。
+  ipcMain.handle('dsh:get-diagnostics', async () => {
+    const host = hostModeInfo()
+    let pluginCount = 0
+    try {
+      pluginCount = (await listPlugins(harnessHome())).length
+    } catch {
+      pluginCount = 0
+    }
+    return { version: app.getVersion(), host, pluginCount, logPath: join(app.getPath('userData'), 'dsh-desktop.log') }
+  })
+
+  // 用系统默认方式打开日志文件（P2-B）。
+  ipcMain.handle('dsh:open-log-file', async () => {
+    const logPath = join(app.getPath('userData'), 'dsh-desktop.log')
+    await shell.openPath(logPath)
   })
 
   // Custom title bar controls: the preload's buttons reach the owning window here.

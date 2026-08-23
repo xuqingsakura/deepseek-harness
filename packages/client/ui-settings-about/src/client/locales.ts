@@ -37,6 +37,12 @@ export const en = {
   hostModeInProcess: 'In-process',
   hostModeChild: 'Child process',
   hostModeUnavailable: 'Unavailable in this build',
+  diagTitle: 'Diagnostics',
+  diagVersion: 'Version',
+  diagHostMode: 'Agent backend',
+  diagPluginCount: 'Plugins installed',
+  diagLogPath: 'Log file',
+  diagOpenLog: 'Open log file',
 }
 
 /** Simplified Chinese strings. */
@@ -76,6 +82,12 @@ export const zh = {
   hostModeInProcess: '进程内',
   hostModeChild: '子进程',
   hostModeUnavailable: '当前构建不可用',
+  diagTitle: '诊断',
+  diagVersion: '版本',
+  diagHostMode: '代理后端',
+  diagPluginCount: '已安装插件',
+  diagLogPath: '日志文件',
+  diagOpenLog: '打开日志文件',
 }
 
 export type AboutKey = keyof typeof en
