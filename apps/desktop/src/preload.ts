@@ -195,6 +195,8 @@ function titleBarText(): string {
 
 /** Mount the title bar and reserve its strip once the document exists. */
 function mountTitleBar(): void {
+  // 仅真实宿主页面(web app/工作台)挂标题栏；启动动画(splash, data:)不显示，使其为纯动画。
+  if (window.location.protocol !== 'http:') return
   const host = document.createElement('div')
   host.id = 'dsh-titlebar'
   host.style.cssText = [
