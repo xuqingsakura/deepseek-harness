@@ -58,6 +58,7 @@ export interface DesktopBridge {
   pluginAuthorizeBuilds(keys: string[]): Promise<{ path: string }>
   pluginUpdate(name: string): Promise<PluginManagerResult>
   pluginUpdateAll(): Promise<PluginManagerResult>
+  pluginCancel(): Promise<{ cancelled: boolean }>
   pluginRemoveMany(names: string[]): Promise<PluginManagerResult>
   pluginSetEnabled(name: string, enabled: boolean): Promise<{ ok: boolean; bundles: string[]; enabled: boolean; liveApplied: boolean }>
   pluginOutdated(): Promise<Record<string, string>>
@@ -75,6 +76,7 @@ export interface DesktopBridge {
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void
   getDiagnostics(): Promise<{ version: string; host: { mode: 'in-process' | 'child'; childAvailable: boolean }; pluginCount: number; logPath: string }>
   openLogFile(): Promise<void>
+  relaunchSafe(): Promise<void>
   /** Import Web-harness data (~/.dsh) into the desktop home (safe merge). */
   migrateWebData(options?: MigrateOptions): Promise<MigrationReport>
   /** Open (or focus) a detached VSCode-style workbench window for one session. */
@@ -109,6 +111,7 @@ const bridge: DesktopBridge = {
   setHostMode: (mode: 'in-process' | 'child') => ipcRenderer.invoke('dsh:set-host-mode', mode),
   getDiagnostics: () => ipcRenderer.invoke('dsh:get-diagnostics'),
   openLogFile: () => ipcRenderer.invoke('dsh:open-log-file'),
+  relaunchSafe: () => ipcRenderer.invoke('dsh:relaunch-safe'),
   onMaximized: (callback: (maximized: boolean) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, maximized: boolean): void =>{  callback(maximized) }
     ipcRenderer.on('dsh:maximized', listener)
@@ -123,6 +126,7 @@ const bridge: DesktopBridge = {
   pluginAuthorizeBuilds: (keys: string[]) => ipcRenderer.invoke('dsh:plugin-allow-builds', keys) as Promise<{ path: string }>,
   pluginUpdate: (name: string) => ipcRenderer.invoke('dsh:plugin-update', name) as Promise<PluginManagerResult>,
   pluginUpdateAll: () => ipcRenderer.invoke('dsh:plugin-update-all') as Promise<PluginManagerResult>,
+  pluginCancel: () => ipcRenderer.invoke('dsh:plugin-cancel') as Promise<{ cancelled: boolean }>,
   pluginRemoveMany: (names: string[]) => ipcRenderer.invoke('dsh:plugin-remove-many', names) as Promise<PluginManagerResult>,
   pluginSetEnabled: (name: string, enabled: boolean) => ipcRenderer.invoke('dsh:plugin-set-enabled', name, enabled) as Promise<{ ok: boolean; bundles: string[]; enabled: boolean; liveApplied: boolean }>,
   pluginOutdated: () => ipcRenderer.invoke('dsh:plugin-outdated') as Promise<Record<string, string>>,

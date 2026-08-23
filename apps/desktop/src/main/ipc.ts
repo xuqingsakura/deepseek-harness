@@ -20,7 +20,7 @@ import { getUpdateState, checkForUpdates, quitAndInstall } from './updater.ts'
 import { migrateWebData, type MigrateOptions } from '../migrate-web-data.ts'
 import {
   authorizeBuilds, checkOutdated, installBuiltinPlugin, installPlugin, listBuiltinPlugins,
-  listPlugins, removePlugin, removePlugins, setPluginEnabled, updateAllPlugins, updatePlugin,
+  listPlugins, removePlugin, removePlugins, setPluginEnabled, disableNonBasePlugins, cancelPluginOp, updateAllPlugins, updatePlugin,
 } from '../plugin-manager.ts'
 
 /** 注册桌面端全部 IPC 处理器与 API 流桥（应用生命周期内只需调用一次）。 */
@@ -59,6 +59,14 @@ export function registerIpc(): void {
       pluginCount = 0
     }
     return { version: app.getVersion(), host, pluginCount, logPath: join(app.getPath('userData'), 'dsh-desktop.log') }
+  })
+
+  // 安全模式重启（P2-A）：禁用非基础插件后重启，用于绕过坏插件导致的启动失败。
+  ipcMain.handle('dsh:relaunch-safe', async () => {
+    try { await disableNonBasePlugins(harnessHome()) } catch { /* 尽力而为 */ }
+    state.quitting = true
+    app.relaunch()
+    app.exit()
   })
 
   // 用系统默认方式打开日志文件（P2-B）。
@@ -182,6 +190,9 @@ export function registerIpc(): void {
       throw new Error(pluginErrorMessage(enabled ? '启用插件' : '停用插件', error))
     }
   })
+  // 取消正在运行的插件操作（P1-B）。
+  ipcMain.handle('dsh:plugin-cancel', () => ({ cancelled: cancelPluginOp() }))
+
   ipcMain.handle('dsh:plugin-outdated', async () => {
     try {
       return await checkOutdated(harnessHome())

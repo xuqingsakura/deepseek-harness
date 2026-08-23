@@ -27,7 +27,7 @@ const FAVICON = join(REPO_ROOT, 'apps', 'web', 'public', 'favicon.svg')
 /** 生成的窗口图标（ICO，多尺寸），供 BrowserWindow 构造使用。 */
 const APP_ICON = join(APP_ROOT, 'assets', 'icon.ico')
 /** 预加载脚本：暴露窗口控制桥并挂载自定义标题栏。 */
-const PRELOAD = join(APP_ROOT, 'lib', 'preload.js')
+const PRELOAD = join(APP_ROOT, 'lib', 'preload.cjs')
 /** 托盘图标资源（favicon 的 256px 渲染同时充当托盘图标）。 */
 const TRAY_ICON = join(APP_ROOT, 'assets', 'icon.png')
 

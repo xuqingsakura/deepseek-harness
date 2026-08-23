@@ -6,7 +6,7 @@
   "type": "module",
   "main": "lib/main.js",
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/bundle-preload.mjs",
     "start": "electron .",
     "smoke": "pnpm run build && electron . --smoke",
     "dev": "pnpm run build && pnpm run start"

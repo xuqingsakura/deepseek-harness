@@ -45,6 +45,8 @@ interface DesktopUpdateBridge {
   setHostMode(mode: 'in-process' | 'child'): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
   getDiagnostics(): Promise<{ version: string; host: { mode: 'in-process' | 'child'; childAvailable: boolean }; pluginCount: number; logPath: string }>
   openLogFile(): Promise<void>
+  relaunchSafe(): Promise<void>
+  pluginCancel(): Promise<{ cancelled: boolean }>
   migrateWebData(options?: {
     source?: string
     dryRun?: boolean
@@ -170,6 +172,18 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
     return () => { alive = false }
   }, [desktop])
 
+  // P1-B: 取消正在执行的插件操作（后端由 plugin-manager 追踪 pnpm 进程）。
+  const [cancelMsg, setCancelMsg] = useState<string | undefined>(undefined)
+  const cancelPlugin = useCallback(async () => {
+    if (desktop === undefined) return
+    try {
+      const res = await desktop.pluginCancel()
+      setCancelMsg(res.cancelled ? t('diagCancelSent') : t('diagCancelNone'))
+    } catch {
+      setCancelMsg(t('diagCancelFailed'))
+    }
+  }, [desktop, t])
+
   const downloaded = state?.status === 'downloaded'
   const checking = state?.status === 'checking' || busy
   const downloading = state?.status === 'downloading'
@@ -238,7 +252,10 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
       </div>
       <div className={css.actions}>
         <button type="button" className={css.button} onClick={() => void desktop?.openLogFile()}>{t('diagOpenLog')}</button>
+        <button type="button" className={css.button} onClick={() => void desktop?.relaunchSafe()}>{t('diagSafeRestart')}</button>
+        <button type="button" className={css.button} onClick={() => void cancelPlugin()}>{t('diagCancelPlugin')}</button>
       </div>
+      {cancelMsg !== undefined && <div className={css.value}>{cancelMsg}</div>}
       <div className={css.divider} />
       <h2 className={css.heading}>{t('migrateTitle')}</h2>
       <p className={css.intro}>{t('migrateIntro')}</p>

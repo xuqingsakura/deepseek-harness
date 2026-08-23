@@ -43,6 +43,11 @@ export const en = {
   diagPluginCount: 'Plugins installed',
   diagLogPath: 'Log file',
   diagOpenLog: 'Open log file',
+  diagSafeRestart: 'Restart in safe mode',
+  diagCancelPlugin: 'Cancel plugin operation',
+  diagCancelSent: 'Cancel sent',
+  diagCancelNone: 'No plugin operation running',
+  diagCancelFailed: 'Cancel failed',
 }
 
 /** Simplified Chinese strings. */
@@ -88,6 +93,11 @@ export const zh = {
   diagPluginCount: '已安装插件',
   diagLogPath: '日志文件',
   diagOpenLog: '打开日志文件',
+  diagSafeRestart: '安全模式重启',
+  diagCancelPlugin: '取消插件操作',
+  diagCancelSent: '已发送取消',
+  diagCancelNone: '当前无正在执行的插件操作',
+  diagCancelFailed: '取消失败',
 }
 
 export type AboutKey = keyof typeof en

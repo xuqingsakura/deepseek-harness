@@ -21,6 +21,9 @@ const WEB_PROFILE = 'web'
 const PROFILES_DIR = 'profiles'
 const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
 
+/** Web profile 的基础 bundle，安全模式永不禁用（否则 UI 起不来）。 */
+const BASE_PROFILE_BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
+
 /** The runtime closure root: dev uses the deployed copy, packaged uses resources. */
 function closureRoot(): string {
   return app.isPackaged
@@ -230,6 +233,19 @@ function ensureNpmrc(dir: string, proxy: PluginProxyConfig): void {
   writeFileSync(path, `${lines.join('\n')}\n`)
 }
 
+/** 当前正在运行的 pnpm 子进程（供取消）。 */
+let activePnpmProcess: ReturnType<typeof spawn> | undefined
+
+/**
+ * 取消正在运行的插件操作（P1-B）：杀掉当前 pnpm 子进程。
+ * @returns 是否有正在运行的进程被取消。
+ */
+export function cancelPluginOp(): boolean {
+  if (activePnpmProcess === undefined) return false
+  activePnpmProcess.kill()
+  return true
+}
+
 /** Run vendored pnpm in the profile directory, capturing output. */
 function runPnpm(dir: string, args: readonly string[], proxy: PluginProxyConfig): Promise<{ status: number | null; output: string }> {
   return new Promise((resolve, reject) => {
@@ -243,9 +259,12 @@ function runPnpm(dir: string, args: readonly string[], proxy: PluginProxyConfig)
     child.stdout.on('data', (chunk) => { stdout += String(chunk) })
     child.stderr.on('data', (chunk) => { stderr += String(chunk) })
     child.on('error', (error) => {
+      if (activePnpmProcess === child) activePnpmProcess = undefined
       reject(new Error(`pnpm failed to start: ${String(error.message)}`))
     })
+    activePnpmProcess = child
     child.on('close', (code) => {
+      if (activePnpmProcess === child) activePnpmProcess = undefined
       resolve({ status: code, output: stdout + stderr })
     })
   })
@@ -540,6 +559,34 @@ export async function removePlugins(home: string, names: readonly string[]): Pro
  * @param enabled - whether the plugin joins the layer stack.
  * @returns the resulting bundle list.
  */
+/**
+ * 安全模式（P2-A）：把非基础 bundle 插件一次性加入 disabled，防止坏插件导致启动崩溃。
+ * 只禁非基础 bundle；基础（base/web-app）永不禁用，保证 UI 能起来。
+ * @param home - harness home。
+ * @returns 当前 disabled 列表（供诊断展示）。
+ */
+export async function disableNonBasePlugins(home: string): Promise<{ disabled: string[] }> {
+  assertSafePluginHome(home)
+  const api = await appBoot()
+  const dir = profileDirFor(home)
+  const manifest = api.readProfileManifest('dsh-desktop', dir)
+  const bundles = manifest.dsh?.profile?.bundles ?? []
+  const base = new Set(BASE_PROFILE_BUNDLES)
+  const disabled = new Set(manifest.dsh?.profile?.disabled ?? [])
+  let changed = false
+  for (const name of bundles) {
+    if (base.has(name)) continue
+    if (disabled.has(name)) continue
+    disabled.add(name)
+    changed = true
+  }
+  if (!changed) return { disabled: [...disabled] }
+  const profile = { ...manifest.dsh?.profile, disabled: [...disabled] }
+  manifest.dsh = { ...manifest.dsh, profile }
+  api.writeProfileManifest(dir, manifest)
+  return { disabled: [...disabled] }
+}
+
 export async function setPluginEnabled(
   home: string, name: string, enabled: boolean,
 ): Promise<{ ok: boolean; bundles: string[]; enabled: boolean }> {

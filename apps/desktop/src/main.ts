@@ -36,6 +36,8 @@ import { createMainWindow } from './main/windows.ts'
 import { registerIpc } from './main/ipc.ts'
 import { resolveHostMode, childHostAvailable } from './main/host-mode.ts'
 import { runSmoke } from './main/smoke.ts'
+import { shouldRecoverSafe, recordBootSuccess, recordBootFailure, clearRecovery } from './main/recovery.ts'
+import { disableNonBasePlugins } from './plugin-manager.ts'
 
 /** The readiness line the web profile prints once its Loader tree settles. */
 /** Create the main window over the host URL. */
@@ -108,6 +110,12 @@ if (GEN_ICON_DIR !== undefined) {
       // In-process boot is the default; DSH_DESKTOP_HOST=child keeps the A2
       // subprocess host available as a fallback (e.g. for runtime debugging).
       const home = harnessHome()
+      // P2-A: 上次启动失败则进入安全模式（禁非基础插件），避免坏插件把启动打成死循环。
+      if (shouldRecoverSafe()) {
+        console.warn('[dsh-desktop] 上次启动失败，进入安全模式（禁用非基础插件）')
+        try { await disableNonBasePlugins(home) } catch { /* 安全模式尽力而为，失败不阻断启动 */ }
+        clearRecovery()
+      }
       const desktopPort = await pickLoopbackPort()
       mark('port-picked')
       const overlayPath = browsePickerOverlayPath()
@@ -166,6 +174,7 @@ if (GEN_ICON_DIR !== undefined) {
           mark('splash-exit')
           if (!window.isDestroyed()) void window.loadURL(url)
         }
+        recordBootSuccess()
         if (!SMOKE) {
           state.tray = createTray(() => window)
           console.log('[dsh-desktop] state.tray created')
@@ -187,6 +196,7 @@ if (GEN_ICON_DIR !== undefined) {
           }
         }
       } catch (error) {
+        recordBootFailure()
         console.error('[dsh-desktop] host failed to start:', error)
         // Swap the splash for an error page and let it paint before closing.
         if (!window.isDestroyed()) void window.loadURL(errorSplashDataUrl(error))

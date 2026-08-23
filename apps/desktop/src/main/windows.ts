@@ -74,9 +74,8 @@ function createMainWindow(url: string | undefined, onClosed: () => void, isSmoke
       preload: PRELOAD,
       contextIsolation: true,
       nodeIntegration: false,
-      // ESM preload requires an unsandboxed renderer; the page is trusted
-      // loopback content owned by the host child.
-      sandbox: false,
+      // P1-C: preload 已是单文件 CJS(bundle-preload)，可安全开启沙箱，降低渲染层攻击面。
+      sandbox: true,
     },
   })
   // 记录主窗口引用，供工作台模式（卸载/恢复）与窗口定位使用。
@@ -210,7 +209,7 @@ function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
       preload: PRELOAD,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
   window.once('ready-to-show', () => {
