@@ -176,6 +176,18 @@ if (GEN_ICON_DIR !== undefined) {
         }
         recordBootSuccess()
         if (!SMOKE) {
+          // P0-B: 记录渲染就绪（#root 出现子节点）耗时，用于定位"启动→真正可用"的剩余时间。
+          void (async () => {
+            const renderDeadline = Date.now() + 60_000
+            while (Date.now() < renderDeadline) {
+              if (window.isDestroyed()) return
+              try {
+                const children = await window.webContents.executeJavaScript("Number(document.getElementById('root')?.children.length ?? 0)") as number
+                if (children > 0) { mark('renderer-ready'); return }
+              } catch { /* 页面仍在导航中，继续等 */ }
+              await new Promise(resolve => setTimeout(resolve, 250))
+            }
+          })()
           state.tray = createTray(() => window)
           console.log('[dsh-desktop] state.tray created')
           // Auto-update: only with a configured feed; the startup check is
