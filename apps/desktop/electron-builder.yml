@@ -20,6 +20,9 @@ extraResources:
   # Vendored pnpm (official dsh plugin installer) shipped for Settings → Plugins.
   - from: runtime/pnpm
     to: pnpm
+  # Bundled Node runtime for the child host mode (P0-A); copied by package.mjs.
+  - from: runtime/node.exe
+    to: runtime/node.exe
 win:
   icon: assets/icon.ico
   target:

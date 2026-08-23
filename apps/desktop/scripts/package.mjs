@@ -101,6 +101,14 @@ if (!existsSync(runtimeDshLib)) {
 run('deploy runtime closure', 'node', ['apps/desktop/scripts/deploy-runtime.mjs'], REPO_ROOT)
 // 4. Compile the Electron shell (main + preload).
 run('build desktop shell', 'pnpm', ['run', 'build'], APP_ROOT)
+
+// Bundled Node runtime for the child host mode (P0-A): copy the exact node ABI the
+// host closure's native addons were built with, so packages can run child host.
+const bundledNodeExe = join(APP_ROOT, 'runtime', 'node.exe')
+if (process.execPath !== bundledNodeExe) {
+  copyFileSync(process.execPath, bundledNodeExe)
+  console.log('package: bundled node.exe -> ' + bundledNodeExe)
+}
 // 5. Package the NSIS installer. CI overrides the machine-specific output
 // directory from electron-builder.yml via DSH_PKG_OUTPUT_DIR.
 const pkgArgs = ['electron-builder', '--win', 'nsis', '--publish', 'never']

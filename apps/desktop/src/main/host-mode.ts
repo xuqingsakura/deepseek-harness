@@ -58,7 +58,7 @@ function resolveHostMode(): HostMode {
   const envMode = process.env.DSH_DESKTOP_HOST?.trim()
   if (envMode === 'child') return 'child'
   if (envMode === 'in-process') return 'in-process'
-  return readHostModeConfig() ?? 'in-process'
+  return readHostModeConfig() ?? 'child'
 }
 
 /**

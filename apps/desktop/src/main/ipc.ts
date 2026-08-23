@@ -13,7 +13,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { harnessHome } from './config.ts'
 import { traceLog } from './log.ts'
-import { hostModeInfo } from './host-mode.ts'
+import { hostModeInfo, writeHostMode } from './host-mode.ts'
 import { state } from './state.ts'
 import { createWorkspaceWindow, restoreMainWindow } from './windows.ts'
 import { getUpdateState, checkForUpdates, quitAndInstall } from './updater.ts'
@@ -41,6 +41,13 @@ export function registerIpc(): void {
 
   // 宿主运行模式诊断：供设置界面展示当前模式与 child 是否可用（只读，生效需重启）。
   ipcMain.handle('dsh:get-host-mode', () => hostModeInfo())
+
+  // 写入宿主运行模式（设置项）：校验后写 host-mode.json，生效需重启应用。
+  ipcMain.handle('dsh:set-host-mode', (_event, mode: unknown) => {
+    if (mode !== 'child' && mode !== 'in-process') throw new Error('dsh-host-mode: 非法宿主模式')
+    writeHostMode(mode)
+    return hostModeInfo()
+  })
 
   // Custom title bar controls: the preload's buttons reach the owning window here.
   ipcMain.on('dsh:window-control', (event, action: unknown) => {

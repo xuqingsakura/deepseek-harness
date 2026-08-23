@@ -40,8 +40,8 @@ afterEach(() => {
 })
 
 describe('host-mode', () => {
-  it('默认解析为 in-process（无环境变量/无配置）', () => {
-    expect(resolveHostMode()).toBe('in-process')
+  it('默认解析为 child（无环境变量/无配置，P0-A 默认改子进程）', () => {
+    expect(resolveHostMode()).toBe('child')
   })
 
   it('环境变量 DSH_DESKTOP_HOST=child 优先于默认', () => {
@@ -54,14 +54,19 @@ describe('host-mode', () => {
     expect(resolveHostMode()).toBe('in-process')
   })
 
-  it('配置 host-mode.json 覆盖默认（无环境变量时）', () => {
+  it('配置 host-mode.json 可覆盖默认（切回 in-process）', () => {
+    writeHostMode('in-process')
+    expect(resolveHostMode()).toBe('in-process')
+  })
+
+  it('配置 host-mode.json 设为 child 生效', () => {
     writeHostMode('child')
     expect(resolveHostMode()).toBe('child')
   })
 
-  it('配置文件的非法值回退为默认 in-process', () => {
+  it('配置文件的非法值回退为默认 child', () => {
     writeFileSync(hostModeFile(), JSON.stringify({ mode: 'bogus' }), 'utf8')
-    expect(resolveHostMode()).toBe('in-process')
+    expect(resolveHostMode()).toBe('child')
   })
 
   it('开发（未打包）模式 child 始终可用', () => {

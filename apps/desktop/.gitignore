@@ -5,3 +5,4 @@ lib/
 .smoke.png
 # One-off dev patch scripts (not shipped).
 scripts/archive/
+runtime/node.exe

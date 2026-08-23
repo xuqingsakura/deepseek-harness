@@ -32,6 +32,11 @@ export const en = {
   migrateStoragesMerged: 'Storage records merged',
   migrateErrors: 'Errors',
   migrateDryRunHint: 'Preview makes no changes.',
+  hostModeTitle: 'Agent backend',
+  hostModeIntro: 'How the agent harness runs. Child process is steadier under heavy load; in-process starts faster. Restart to apply.',
+  hostModeInProcess: 'In-process',
+  hostModeChild: 'Child process',
+  hostModeUnavailable: 'Unavailable in this build',
 }
 
 /** Simplified Chinese strings. */
@@ -66,6 +71,11 @@ export const zh = {
   migrateStoragesMerged: '合并存储记录',
   migrateErrors: '错误',
   migrateDryRunHint: '预览不会改动任何文件。',
+  hostModeTitle: '代理后端',
+  hostModeIntro: '运行代理后端的方式。子进程在高负载下更平稳，进程内启动更快。切换后重启应用生效。',
+  hostModeInProcess: '进程内',
+  hostModeChild: '子进程',
+  hostModeUnavailable: '当前构建不可用',
 }
 
 export type AboutKey = keyof typeof en

@@ -41,6 +41,8 @@ interface DesktopUpdateBridge {
   updateCheck(): Promise<DesktopUpdateState>
   updateInstall(): void
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void
+  getHostMode(): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
+  setHostMode(mode: 'in-process' | 'child'): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
   migrateWebData(options?: {
     source?: string
     dryRun?: boolean
@@ -138,6 +140,25 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
 
   const install = useCallback(() => { desktop?.updateInstall() }, [desktop])
 
+  // Host runtime mode (P0-A): read current mode; switching writes host-mode.json and needs a restart.
+  const [hostMode, setHostModeState] = useState<{ mode: 'in-process' | 'child'; childAvailable: boolean } | undefined>(undefined)
+  const [hostBusy, setHostBusy] = useState(false)
+  useEffect(() => {
+    if (desktop === undefined) return
+    let alive = true
+    void desktop.getHostMode().then((info) => { if (alive) setHostModeState(info) }).catch(() => {})
+    return () => { alive = false }
+  }, [desktop])
+  const switchHostMode = useCallback(async (mode: 'in-process' | 'child') => {
+    if (desktop === undefined || hostBusy || mode === hostMode?.mode) return
+    setHostBusy(true)
+    try {
+      setHostModeState(await desktop.setHostMode(mode))
+    } finally {
+      setHostBusy(false)
+    }
+  }, [desktop, hostBusy, hostMode?.mode])
+
   const downloaded = state?.status === 'downloaded'
   const checking = state?.status === 'checking' || busy
   const downloading = state?.status === 'downloading'
@@ -172,6 +193,20 @@ export function AboutSection({ t = (key: AboutKey) => key }: AboutSectionProps) 
         )}
       </div>
 
+      <div className={css.divider} />
+      <h2 className={css.heading}>{t('hostModeTitle')}</h2>
+      <p className={css.intro}>{t('hostModeIntro')}</p>
+      <div className={css.actions}>
+        <button type="button" className={css.button} onClick={() => void switchHostMode('in-process')}
+          disabled={hostBusy || hostMode?.mode === 'in-process'}>
+          {hostMode?.mode === 'in-process' ? `${t('hostModeInProcess')} ✓` : t('hostModeInProcess')}
+        </button>
+        <button type="button" className={css.button} onClick={() => void switchHostMode('child')}
+          disabled={hostBusy || hostMode?.mode === 'child' || hostMode?.childAvailable === false}
+          title={hostMode?.childAvailable === false ? t('hostModeUnavailable') : undefined}>
+          {hostMode?.mode === 'child' ? `${t('hostModeChild')} ✓` : t('hostModeChild')}
+        </button>
+      </div>
       <div className={css.divider} />
       <h2 className={css.heading}>{t('migrateTitle')}</h2>
       <p className={css.intro}>{t('migrateIntro')}</p>
