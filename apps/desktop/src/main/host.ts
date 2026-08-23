@@ -91,7 +91,7 @@ function startHost(port: number, overlayPath: string, onLine?: (line: string) =>
   spawnEnv.DSH_HOME = configuredHome !== undefined && configuredHome !== '' ? configuredHome : packaged ? packagedHome : DEFAULT_DSH_HOME
 
   debugLog(`spawn node=${executable} launcher=${launcher} cwd=${packaged ? join(process.resourcesPath, 'runtime', 'host-deploy') : 'default'}`)
-  const child: ChildProcess = spawn(executable, [launcher, 'web', '--patch', overlayPath, '--port', String(port)], {
+  const child: ChildProcess = spawn(executable, [launcher, 'web', '--patch', overlayPath, '--port', String(port), '--no-open'], {
     env: spawnEnv,
     ...(packaged ? { cwd: join(process.resourcesPath, 'runtime', 'host-deploy') } : {}),
     stdio: ['ignore', 'pipe', 'pipe'],
