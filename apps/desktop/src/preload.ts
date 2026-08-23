@@ -77,6 +77,7 @@ export interface DesktopBridge {
   getDiagnostics(): Promise<{ version: string; host: { mode: 'in-process' | 'child'; childAvailable: boolean }; pluginCount: number; logPath: string }>
   openLogFile(): Promise<void>
   relaunchSafe(): Promise<void>
+  reportAppReady(): void
   /** Import Web-harness data (~/.dsh) into the desktop home (safe merge). */
   migrateWebData(options?: MigrateOptions): Promise<MigrationReport>
   /** Open (or focus) a detached VSCode-style workbench window for one session. */
@@ -112,6 +113,7 @@ const bridge: DesktopBridge = {
   getDiagnostics: () => ipcRenderer.invoke('dsh:get-diagnostics'),
   openLogFile: () => ipcRenderer.invoke('dsh:open-log-file'),
   relaunchSafe: () => ipcRenderer.invoke('dsh:relaunch-safe'),
+  reportAppReady: () => { fadeLoadingOverlay(); ipcRenderer.send('dsh:app-ready') },
   onMaximized: (callback: (maximized: boolean) => void): (() => void) => {
     const listener = (_event: IpcRendererEvent, maximized: boolean): void =>{  callback(maximized) }
     ipcRenderer.on('dsh:maximized', listener)
@@ -260,8 +262,51 @@ function mountTitleBar(): void {
   bridge.onMaximized(applyMaximized)
 }
 
+/** 启动加载层相关（P0-C）：web app 数据就绪(reportAppReady)后淡出，超时兜底。 */
+const READY_TIMEOUT_MS = 8_000
+let loadingOverlay: HTMLDivElement | null = null
+
+/** 淡出并移除启动加载层。 */
+function fadeLoadingOverlay(): void {
+  if (loadingOverlay === null) return
+  loadingOverlay.style.transition = 'opacity 320ms ease'
+  loadingOverlay.style.opacity = '0'
+  const overlay = loadingOverlay
+  loadingOverlay = null
+  setTimeout(() => overlay.remove(), 360)
+}
+
+/** 在 web app 页注入全屏启动加载层（跳过 splash 与工作台窗口），并设超时兜底。 */
+function mountLoadingOverlay(): void {
+  // 仅真实宿主页面注入；splash(data:) 与工作台(dshWindow=workspace)跳过。
+  if (window.location.protocol !== 'http:') return
+  if (new URLSearchParams(window.location.search).get('dshWindow') === 'workspace') return
+  if (loadingOverlay !== null) return
+  const host = document.createElement('div')
+  host.id = 'dsh-loading-overlay'
+  host.style.cssText = [
+    'position: fixed',
+    'inset: 0',
+    'z-index: 2147483646',
+    'display: flex',
+    'flex-direction: column',
+    'align-items: center',
+    'justify-content: center',
+    'gap: 12px',
+    'background: var(--dsw-alias-bg-base, #ffffff)',
+    'color: var(--dsw-alias-label-primary, #111418)',
+    '-webkit-app-region: no-drag',
+  ].join('; ')
+  host.innerHTML = '<div style="font-size: 14px; letter-spacing: 0.02em;">正在加载对话…</div>'
+  document.body.appendChild(host)
+  loadingOverlay = host
+  setTimeout(() => { fadeLoadingOverlay() }, READY_TIMEOUT_MS)
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', mountTitleBar, { once: true })
+  document.addEventListener('DOMContentLoaded', mountLoadingOverlay, { once: true })
 } else {
   mountTitleBar()
+  mountLoadingOverlay()
 }

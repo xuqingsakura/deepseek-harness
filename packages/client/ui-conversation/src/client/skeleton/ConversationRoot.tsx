@@ -32,6 +32,16 @@ export function ConversationRoot({
   const composerBlock = useComposerBlock(block => block)
 
   const [pickerOpen, setPickerOpen] = useState(false)
+
+  // P0-C: 桌面端启动加载层等待「当前会话不再 loading」再淡出（浏览器版无桥则忽略）。
+  const appReadyRef = useRef(false)
+  useEffect(() => {
+    if (appReadyRef.current) return
+    if (openState !== 'loading') {
+      appReadyRef.current = true
+      ;(window as unknown as { dshDesktop?: { reportAppReady?: () => void } }).dshDesktop?.reportAppReady?.()
+    }
+  }, [openState])
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
   const pickerAnchor = useRef<HTMLButtonElement>(null)
 

@@ -239,6 +239,10 @@ Phase 2(性能监控/清理/中文注释) — 收尾
 ### P1-B 插件操作取消
 - `plugin-manager` 追踪 pnpm 子进程，暴露 `cancelPluginOp()`；IPC `dsh:plugin-cancel` + preload `pluginCancel`；诊断区「取消插件操作」（有无运行的反馈文案）。
 
+### P0-C 启动→主界面数据就绪过渡
+- preload 在 web app 页注入全屏启动加载层（跳过 splash/工作台）；web app 会话不再 `loading` 时调 `reportAppReady()` 上报，加载层淡出（超时 8s 兜底）。
+- `ConversationRoot` 新增就绪上报；main 增加 `dsh:app-ready` 记录 `boot:data-ready`。
+
 ### 测试与文档
 - 新增 `host-mode.spec.ts` / `window-state.spec.ts` / `recovery.spec.ts`；桌面单测 **4 文件 / 22 用例全通过**。
 - `DESKTOP_GUI_TEST.md`：A 组注明沙箱回归；C 组默认改 child；新增 G1–G10 用例。

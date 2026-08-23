@@ -19,7 +19,7 @@
  * @module @deepseek-ai/dsh-desktop/main
  */
 
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 // electron-updater exposes autoUpdater as a lazy CJS getter, so the ESM named
 // import is undefined; take it off the default namespace instead.
 import { join, resolve } from 'node:path'
@@ -107,6 +107,10 @@ if (GEN_ICON_DIR !== undefined) {
       const bootStart = Date.now()
       const mark = (phase: string): void => debugLog(`[dsh-desktop] boot:${phase} +${Date.now() - bootStart}ms`)
       mark('app-ready')
+      // P0-C: web app 会话数据就绪(reportAppReady)后上报，记录 data-ready 用时；加载层由 preload 淡出。
+      ipcMain.on('dsh:app-ready', (event) => {
+        if (!event.sender.isDestroyed()) mark('data-ready')
+      })
       // In-process boot is the default; DSH_DESKTOP_HOST=child keeps the A2
       // subprocess host available as a fallback (e.g. for runtime debugging).
       const home = harnessHome()
