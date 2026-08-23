@@ -23,6 +23,9 @@ extraResources:
   # Bundled Node runtime for the child host mode (P0-A); copied by package.mjs.
   - from: runtime/node.exe
     to: runtime/node.exe
+  # Browse picker overlay must be a real file so the child (Node) host can read it.
+  - from: assets/desktop-browse-picker.yml
+    to: assets/desktop-browse-picker.yml
 win:
   icon: assets/icon.ico
   target:

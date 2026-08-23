@@ -44,6 +44,9 @@ const BROWSE_PICKER_OVERLAY = fileURLToPath(new URL('../assets/desktop-browse-pi
 
 /** Absolute path of the browse-picker overlay, shared with the child-host path. */
 export function browsePickerOverlayPath(): string {
+  // 打包版：overlay 必须以真实文件放到 resources/assets（asar 里的文件，普通 Node 子进程读不到）。
+  const packagedOverlay = join(process.resourcesPath, 'assets', 'desktop-browse-picker.yml')
+  if (existsSync(packagedOverlay)) return packagedOverlay
   return BROWSE_PICKER_OVERLAY
 }
 
