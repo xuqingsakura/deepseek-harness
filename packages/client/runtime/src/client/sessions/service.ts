@@ -715,10 +715,10 @@ export class SessionRuntime implements ISessions {
       }
     }
     const persisted = this.selection.getSnapshot().sessionId
-    // No current (cleared, or masked gap) wipes the persisted cell — a reload
-    // stays on empty; the in-memory selection still resurfaces a masked id.
+    // 方案A：仅在列表真正 `ready`（确定没有会话）时才清空持久化选择；
+    // 启动时列表未就绪(pending/loading)的 transient 空态不清空，以保住「打开上次会话」的恢复。
     if (current === undefined) {
-      if (persisted !== undefined) this.selection.set({})
+      if (phase === 'ready' && persisted !== undefined) this.selection.set({})
     } else if (byId[current] !== undefined
       && (persisted !== current
         || this.selection.getSnapshot().subagentAddress?.childSessionId !== currentAddress?.childSessionId
