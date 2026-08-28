@@ -39,18 +39,6 @@ export interface DesktopBridge {
   getHostMode(): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
   setHostMode(mode: 'in-process' | 'child'): Promise<{ mode: 'in-process' | 'child'; childAvailable: boolean }>
   onMaximized(callback: (maximized: boolean) => void): () => void
-  apiFetch(request: { url: string; method: string; headers: Record<string, string>; body?: string }): Promise<{
-    status: number
-    statusText: string
-    headers: Record<string, string>
-    text: string
-  }>
-  subscribeApiStream(
-    channel: 'mux' | 'host',
-    onFrame: (envelope: unknown) => void,
-    onOpen: () => void,
-    onEnd: () => void,
-  ): () => void
   notify(options: { title: string; body: string }): void
   pluginAdd(spec: string): Promise<PluginManagerResult>
   pluginRemove(name: string): Promise<PluginManagerResult>
@@ -146,42 +134,7 @@ const bridge: DesktopBridge = {
     ipcRenderer.on('dsh:update-state', listener)
     return () => ipcRenderer.removeListener('dsh:update-state', listener)
   },
-  apiFetch: (request: { url: string; method: string; headers: Record<string, string>; body?: string }) => {
-    return ipcRenderer.invoke('dsh:api-fetch', request)
-  },
-  subscribeApiStream: (
-    channel: 'mux' | 'host',
-    onFrame: (envelope: unknown) => void,
-    onOpen: () => void,
-    onEnd: () => void,
-  ): (() => void) => {
-    const frameListener = (_event: IpcRendererEvent, source: string, envelopes: unknown): void => {
-      if (source !== channel) return
-      // The main process coalesces bursts into one message carrying an array;
-      // a single frame arrives unwrapped (kept for older/plain senders).
-      if (Array.isArray(envelopes)) {
-        for (const envelope of envelopes) onFrame(envelope)
-      } else {
-        onFrame(envelopes)
-      }
-    }
-    const openListener = (_event: IpcRendererEvent, source: string): void => {
-      if (source === channel) onOpen()
-    }
-    const endListener = (_event: IpcRendererEvent, source: string): void => {
-      if (source === channel) onEnd()
-    }
-    ipcRenderer.on('dsh:api-frame', frameListener)
-    ipcRenderer.on('dsh:api-stream-open', openListener)
-    ipcRenderer.on('dsh:api-stream-end', endListener)
-    ipcRenderer.send('dsh:api-stream-subscribe', channel)
-    return () => {
-      ipcRenderer.removeListener('dsh:api-frame', frameListener)
-      ipcRenderer.removeListener('dsh:api-stream-open', openListener)
-      ipcRenderer.removeListener('dsh:api-stream-end', endListener)
-      ipcRenderer.send('dsh:api-stream-unsubscribe', channel)
-    }
-  },
+
 }
 
 contextBridge.exposeInMainWorld('dshDesktop', bridge)

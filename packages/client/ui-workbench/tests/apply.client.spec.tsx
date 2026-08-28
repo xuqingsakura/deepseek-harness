@@ -3,7 +3,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { SlotTestRuntime, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as layoutApply, inject as layoutInject } from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -17,7 +17,8 @@ import { createWorkbenchState, type WorkbenchStateHandle } from '../src/client/w
 import { en, zh } from '../src/client/locales.ts'
 import type { WorkbenchReadResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SessionId, SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 
 usePinnedBrowserLanguages('zh-CN')
@@ -323,6 +324,10 @@ describe('ui-workbench browser plugin', () => {
       inputActions={undefined as never}
       useSessions={(() => undefined) as never}
       useWorkspaces={(() => undefined) as never}
+      useConversation={(() => undefined) as never}
+      useChat={(() => undefined) as never}
+      useTrajectory={(() => undefined) as never}
+      useSessionPendingInteraction={(() => undefined) as never}
     />)
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
     expect(workbench.getSnapshot()).toEqual({ open: true, sessionId: 's1', openPaths: [], activePath: undefined, tab: 'files', browserUrl: 'https://www.deepseek.com' })
@@ -426,6 +431,10 @@ describe('ui-workbench browser plugin', () => {
       inputActions={undefined as never}
       useSessions={(() => undefined) as never}
       useWorkspaces={(() => undefined) as never}
+      useConversation={(() => undefined) as never}
+      useChat={(() => undefined) as never}
+      useTrajectory={(() => undefined) as never}
+      useSessionPendingInteraction={(() => undefined) as never}
     />)
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
     expect(workbench.getSnapshot()).toEqual({ open: true, sessionId: 's2', openPaths: [], activePath: undefined, tab: 'files', browserUrl: 'https://www.deepseek.com' })
@@ -489,15 +498,15 @@ describe('ui-workbench browser plugin', () => {
 
   it('renders the viewer seat through the real slots renderer with a live session', async () => {
     const runtime = await SlotTestRuntime.create()
-    runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
-    runtime.provide('remote', { $on: () => () => {} })
-    runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
-    runtime.provide('layout', {
+    runtime.ctx.provide('connection', { api: { settings: {} }, isLoopback: false })
+    runtime.ctx.provide('remote', { $on: () => () => {} })
+    runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+    runtime.ctx.provide('layout', {
       toggleSidebar: vi.fn(), openDetails: vi.fn(), closeDetails: vi.fn(),
       toggleBottom: vi.fn(), closeBottom: vi.fn(),
       openWorkbench: vi.fn(), closeWorkbench: vi.fn(), setSidebarView: vi.fn(),
     })
-    runtime.provide('remote.workbench', {
+    runtime.ctx.provide('remote.workbench', {
       cwd: vi.fn().mockResolvedValue({ ok: true, value: CWD }),
       listDir: vi.fn().mockResolvedValue({ ok: true, value: LIST }),
       readText: vi.fn().mockResolvedValue({ ok: true, value: READ }),
@@ -517,12 +526,12 @@ describe('ui-workbench browser plugin', () => {
       gitCheckout: vi.fn().mockResolvedValue({ ok: true, value: undefined }),
     })
     const locale = new LocaleRuntime(runtime.ctx)
-    runtime.provide('locale', locale)
+    runtime.ctx.provide('locale', locale)
     runtime.slots.installLocale(locale)
     await runtime.sessions.add({
       id: 's1',
       summary: { title: 'S', displayTitle: 'S', cwd: '/proj' },
-      snapshot: { nodes: [], blank: false, composerPhase: 'active' as const },
+      snapshot: { blank: false },
       session: { prompt: vi.fn(async () => ({ ok: true, value: { accepted: true } })), loadOlder: vi.fn() } as never,
     })
     const WB_CHILDREN = {

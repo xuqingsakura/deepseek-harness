@@ -2,7 +2,8 @@
 
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react'
 import type { WorkbenchGitDiffResult, WorkbenchReadResult, WorkbenchWriteResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ObservableSnapshot, SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import type { WorkbenchStateHandle } from './workbench-store.ts'

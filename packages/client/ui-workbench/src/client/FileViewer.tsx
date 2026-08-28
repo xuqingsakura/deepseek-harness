@@ -148,7 +148,7 @@ export function FileViewer({ sessionId, path, readText, writeText, t, onDirtyCha
           <div className={css.warning}>{t('viewer.truncated')}</div>
         )}
         {state.status === 'ready' && !state.result.binary && markdown && (
-          <MarkdownText text={state.result.content} codeLabels={codeLabels} />
+          <MarkdownText text={state.result.content} labels={{ code: codeLabels, footnotes: t('footnotes') }} />
         )}
         {state.status === 'ready' && !state.result.binary && !markdown && (
           <CodeEditor

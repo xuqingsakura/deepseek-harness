@@ -83,13 +83,11 @@ export async function runSmoke(window: BrowserWindow): Promise<boolean> {
   const ipcTest = await window.webContents.executeJavaScript(`(async () => {
     const bridge = window.dshDesktop
     if (bridge === undefined) return { bridge: false }
-    const response = await bridge.apiFetch({
-      url: window.location.origin + '/api/host.describe',
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'client-request', rpcId: 'smoke-ipc', method: 'host.describe', payload: {} }),
-    })
-    return { bridge: true, status: response.status }
+    // The renderer now rides the host's loopback HTTP/WebSocket transport
+    // instead of an IPC API carrier; probe the desktop bridge through a method
+    // that still exists (host mode) rather than the removed apiFetch.
+    const mode = await bridge.getHostMode()
+    return { bridge: true, status: mode.mode }
   })()`) as unknown
   console.log(`DESKTOP_IPC_TEST ${JSON.stringify(ipcTest)}`)
   console.log(`DESKTOP_PICKER_TEST picker=${state.host?.picker ?? 'n/a'}`)

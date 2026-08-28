@@ -4,7 +4,8 @@
  * view the user is working in. */
 
 import { useSyncExternalStore } from 'react'
-import type { ObservableSnapshot, SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ILayout } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'

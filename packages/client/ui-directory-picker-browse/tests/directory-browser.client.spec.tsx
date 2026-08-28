@@ -1200,11 +1200,13 @@ describe('DirectoryBrowser', () => {
 
   it('localizes a permission fault (Windows EPERM known folder) instead of the raw host message', async () => {
     const listDirectory = vi.fn(async () => {
-      throw new DirectoryBrowseError({
-        code: 'directory-unreadable',
-        message: 'cannot list C:\\Users\\u\\Start Menu: EPERM: operation not permitted',
-        details: { path: 'C:\\Users\\u\\Start Menu' },
-      })
+      throw {
+        rpcError: {
+          code: 'directory-unreadable',
+          message: 'cannot list C:\\Users\\u\\Start Menu: EPERM: operation not permitted',
+          details: { path: 'C:\\Users\\u\\Start Menu' },
+        },
+      }
     })
     mount({
       listDirectory,

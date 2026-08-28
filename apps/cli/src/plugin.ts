@@ -61,11 +61,10 @@ function reconcilePlugins(before: ProfileManifest, profileDir: string): void {
   const beforeDeps = new Set(Object.keys(before.dependencies ?? {}))
   const dependencies = Object.keys(after.dependencies ?? {})
   const plugins = after.dsh?.profile?.bundles ?? []
-  const disabled = new Set(after.dsh?.profile?.disabled ?? [])
   let changed = false
   for (const packageName of dependencies) {
     const isBundle = exportsPatch(packageName, profileDir)
-    if (isBundle && !disabled.has(packageName) && !plugins.includes(packageName)) {
+    if (isBundle && !plugins.includes(packageName)) {
       plugins.push(packageName)
       changed = true
     } else if (!isBundle && !beforeDeps.has(packageName)) {
@@ -80,8 +79,6 @@ function reconcilePlugins(before: ProfileManifest, profileDir: string): void {
     // Only dependency-managed entries are subject to removal; template
     // bundles (dsh-base and friends) are not dependencies.
     const wasDependency = beforeDeps.has(packageName) || dependencySet.has(packageName)
-    // `disabled` toggles a row inside the layer stack; it never evicts the
-    // bundle, so a stopped plugin can re-enable live through the running tree.
     const stillBundle = dependencySet.has(packageName) && exportsPatch(packageName, profileDir)
     if (wasDependency && !stillBundle) {
       plugins.splice(plugins.indexOf(packageName), 1)

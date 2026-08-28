@@ -76,13 +76,18 @@ function isPermissionMessage(message: string): boolean {
   return /EPERM|EACCES|permission denied|operation not permitted|access is denied/i.test(message)
 }
 
-/** Failure text: a localized permission hint when the Host reports one, else the Host business message or the throw's text. */
+/**
+ * Failure text: a localized permission hint when the Host reports an
+ * unreadable-directory fault (Windows EPERM on protected known folders, POSIX
+ * EACCES), else the Host business message or the throw's text.
+ */
 function failureText(error: unknown, t: Translate): string {
-  if (error instanceof DirectoryBrowseError) {
-    if (error.rpcError.code === 'directory-unreadable' && isPermissionMessage(error.rpcError.message)) {
-      return t('browser.permissionDenied', { path: error.rpcError.details.path })
+  if (error !== null && typeof error === 'object' && 'rpcError' in error) {
+    const rpcError = (error as { rpcError?: { code?: string; message?: string; details?: { path?: string } } }).rpcError
+    if (rpcError?.code === 'directory-unreadable' && typeof rpcError.message === 'string' && isPermissionMessage(rpcError.message)) {
+      return t('browser.permissionDenied', { path: rpcError.details?.path ?? '' })
     }
-    return error.rpcError.message
+    if (typeof rpcError?.message === 'string') return rpcError.message
   }
   return error instanceof Error ? error.message : String(error)
 }

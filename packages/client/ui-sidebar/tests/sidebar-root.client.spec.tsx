@@ -20,6 +20,8 @@ afterEach(() => {
 // The shell never reads the global hooks itself, but they ride the standard
 // props share; stub them as never-called functions.
 const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
+const noAttention = new Map()
+const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention as never)
 
 function mountShell({ collapsed = false, width = 300, initialView = 'default', workbench = false }: { collapsed?: boolean; width?: number; initialView?: 'default' | 'workbench'; workbench?: boolean } = {}) {
   const startSession = vi.fn()
@@ -34,6 +36,7 @@ function mountShell({ collapsed = false, width = 300, initialView = 'default', w
     <SidebarRoot
       collapsed={current.collapsed} width={current.width} view={current.view}
       useSessions={neverHook} useWorkspaces={neverHook}
+      useSessionPendingInteraction={useSessionPendingInteraction}
       startSession={startSession} toggleSidebar={toggleSidebar}
       setSidebarView={setSidebarView}
       workbenchAvailable={() => current.workbench}

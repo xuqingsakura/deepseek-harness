@@ -33,10 +33,10 @@ afterEach(() => {
  */
 async function bench(options: { locale?: 'en' } = {}) {
   const runtime = await SlotTestRuntime.create()
-  runtime.provide('layout', { toggleSidebar: vi.fn(), openWorkbench: vi.fn(), closeWorkbench: vi.fn(), setSidebarView: vi.fn() })
+  runtime.ctx.provide('layout', { toggleSidebar: vi.fn(), openWorkbench: vi.fn(), closeWorkbench: vi.fn(), setSidebarView: vi.fn() })
   const locale = new LocaleRuntime(runtime.ctx)
   if (options.locale === 'en') locale.setLocale('en')
-  runtime.provide('locale', locale)
+  runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   await runtime.declare({ 'sidebar': { kind: 'single', scope: 'root' } })
   await runtime.mount({ inject: [...inject], apply })

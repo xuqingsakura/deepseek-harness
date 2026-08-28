@@ -7,7 +7,8 @@
  * the host.
  */
 import type { WorkbenchWriteResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -15,6 +16,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // Type-only: pulls the generated Remote API (ctx.remote.workbench) through the
 // Client assembly boundary.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { en, zh, type WorkbenchKey } from './locales.ts'
 import { createWorkbenchState, type WorkbenchStateHandle } from './workbench-store.ts'
 import { WorkbenchToggle, type WorkbenchToggleProps } from './WorkbenchToggle.tsx'
@@ -59,7 +62,7 @@ function remoteFailure(method: string, error: { code: string; message: string })
  */
 function referenceInDraft(ctx: ClientContext, sessionId: string, relPath: string): void {
   try {
-    const scope = ctx.sessions.scope(sessionId as never)
+    const scope = ctx.sessions.scope(sessionId as SessionId)
     if (scope === undefined) return
     const conversation = ctx.get('conversation') as {
       input: { for: (actx: unknown) => { state: { getSnapshot: () => { draft: string } }; setDraft: (text: string) => void } }
