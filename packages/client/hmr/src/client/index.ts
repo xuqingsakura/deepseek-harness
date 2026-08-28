@@ -1,11 +1,9 @@
 /**
  * client-hmr, browser half: hot-reload driver for client plugin entries.
  *
- * Listens on the host's system SSE channel (`GET /plugins/events`). A
- * `rebuilt` frame reloads the entry's bundle and swaps the cordis
- * fiber in place; a `graph` frame reconciles membership (mount rows that
- * joined the graph, tear down rows that left), so a host-side plugin
- * enable/disable applies without a page reload. Every graph entry is a plugin bundle
+ * Listens on the host's system SSE channel (`GET /plugins/events`); on a
+ * `rebuilt` frame it reloads the entry's bundle and swaps the cordis
+ * fiber in place. Every graph entry is a plugin bundle
  * — `immediately` rows differ only in stage-one prefetch (a boot
  * optimization), so all rostered plugin packages share these reload semantics;
  * normal packages (react family, cordis, shell, pure libs) are not entries
@@ -65,9 +63,8 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
-import type { WebBootGraph } from '@deepseek-ai/dsh-client-modules'
 import type { PluginsEventFrame } from '../events.ts'
-import { EVENTS_ENDPOINT } from '../events.ts'
+import { EVENTS_ENDPOINT, parsePluginsEventFrame } from '../events.ts'
 
 export type { PluginsEventFrame } from '../events.ts'
 export { EVENTS_ENDPOINT } from '../events.ts'
@@ -86,23 +83,12 @@ function findEntry(loader: Loader, id: string): Entry | undefined {
   return undefined
 }
 
-/** The client module system's own graph row (kernel-adopted; never re-created here). */
-const MODULES_ID = '@deepseek-ai/dsh-client-modules'
-
-/** The shell assembly pseudo-entry (kernel-own; never a host graph row). */
-const APP_SHELL_ID = '@deepseek-ai/dsh-client-app-shell'
-
-/** Kernel rows that are never graph-managed and must never be torn down. */
-const KERNEL_IDS = new Set([MODULES_ID, APP_SHELL_ID])
-
 /** Remove every `<style data-plugin>` tag owned by `id` (attribute compared verbatim — no CSS-selector escaping pitfalls). */
 function removeOwnedStyles(id: string): void {
   for (const el of document.querySelectorAll('style[data-plugin]')) {
     if (el.getAttribute('data-plugin') === id) el.remove()
   }
 }
-
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
  * Mount the HMR driver: subscribe to the system SSE channel and hot-swap
@@ -115,7 +101,7 @@ export function apply(ctx: Context): void {
   const modLoader = ctx.modules
   const loader: Loader = ctx.loader
 
-  async function reload(id: string): Promise<void> {
+  async function reload(id: string, rev: string): Promise<void> {
     const entry = findEntry(loader, id)
     if (entry === undefined) {
       ctx.logger.warn(`client-hmr: rebuilt frame for unknown entry "${id}" (not in the loader tree)`)
@@ -126,7 +112,7 @@ export function apply(ctx: Context): void {
     // async half while the old fiber still serves: script loading registers
     // the fresh factory with zero side effects (lazy CJS — module bodies run
     // at materialization, not execution).
-    modLoader.invalidate(id)
+    modLoader.invalidate(id, rev)
     await modLoader.prefetch(id)
 
     const oldFiber = entry.fiber
@@ -153,54 +139,21 @@ export function apply(ctx: Context): void {
     await entry.fiber?.await()
   }
 
-  /**
-   * Reconcile the renderer's loader tree against an authoritative graph frame:
-   * mount graph rows that are missing, tear down rows that left the graph. The
-   * graph is the single composition source, so a host-side plugin
-   * enable/disable (or any layer change) applies here without a page reload.
-   * Rev changes stay on `rebuilt` frames; this pass only handles membership.
-   * A fiberless entry (failed import) is removed so the next graph frame
-   * retries it.
-   */
-  async function reconcile(graph: WebBootGraph): Promise<void> {
-    const ids = new Set(graph.entries.map(row => row.id))
-    for (const entry of loader.entries()) {
-      const name = entry.options.name
-      if (ids.has(name) || KERNEL_IDS.has(name)) continue
-      // Skip rows still importing: the kernel creates every graph entry
-      // concurrently at boot, and removing a mid-import entry would race its
-      // own create (resolve-after-remove). The channel opens only after the
-      // tree settled, so this guard only covers frame races at the edge.
-      if (entry._initTask !== undefined) continue
-      ctx.logger.info(`client-hmr: unmounting "${name}" (left the host graph)`)
-      await loader.remove(entry.id)
-    }
-    for (const row of graph.entries) {
-      if (row.id === MODULES_ID) continue
-      const entry = findEntry(loader, row.id)
-      if (entry !== undefined && entry.fiber !== undefined) continue
-      if (entry !== undefined) await loader.remove(entry.id)
-      ctx.logger.info(`client-hmr: mounting "${row.id}" (joined the host graph)`)
-      await loader.create({ name: row.id })
-    }
-  }
-
   // Serialize reloads: frames can arrive faster than a swap completes, and
   // interleaved dispose/execute chains would corrupt the single-slot handoff.
   let queue: Promise<void> = Promise.resolve()
   const handle = (frame: PluginsEventFrame): void => {
     switch (frame.type) {
       case 'rebuilt':
-        queue = queue.then(() => reload(frame.id)).catch((error: unknown) => {
+        queue = queue.then(() => reload(frame.id, frame.rev)).catch((error: unknown) => {
           ctx.logger.error(`client-hmr: reload of "${frame.id}" failed`)
           ctx.logger.error(error)
         })
         break
       case 'graph':
-        queue = queue.then(() => reconcile(frame.graph)).catch((error: unknown) => {
-          ctx.logger.error('client-hmr: graph reconciliation failed')
-          ctx.logger.error(error)
-        })
+        // Connect-time snapshot, unused. Each rebuilt frame carries the
+        // revision that selects the immutable single-resource combo script; the boot
+        // graph remains the initial-load record until a page reload.
         break
       default:
         // Merge-extensible frame union: unknown frame types from newer hosts
@@ -210,42 +163,23 @@ export function apply(ctx: Context): void {
   }
 
   ctx.effect(() => {
-    let source: EventSource | undefined
-    let closed = false
-    const open = async (): Promise<void> => {
-      // The kernel creates every graph entry concurrently with this entry's
-      // activation, and the host answers a connect with an immediate graph
-      // frame. A frame racing that creation would remove an entry mid-import
-      // (the kernel's create loop then resolves a removed id) or mount a row
-      // the kernel is about to create — both corrupt the tree. Open the
-      // channel only after the shell's own entry creation settled: the
-      // app-shell assembly row exists (the kernel creates it last) and no
-      // entry still carries an import or lifecycle task.
-      while (!closed) {
-        const entries = [...loader.entries()]
-        const shellReady = entries.some(entry => entry.options.name === APP_SHELL_ID)
-        const tasks = loader.getTasks()
-        if (shellReady && tasks.length === 0) break
-        await Promise.allSettled(tasks.length > 0 ? tasks : [sleep(10)])
+    const source = new EventSource(EVENTS_ENDPOINT)
+    source.addEventListener('message', (event: MessageEvent<string>) => {
+      let value: unknown
+      try {
+        value = JSON.parse(event.data) as unknown
+      } catch {
+        // Wire boundary: a malformed dev-channel frame is dropped loudly.
+        ctx.logger.warn(`client-hmr: unparseable event frame: ${event.data}`)
+        return
       }
-      if (closed) return
-      source = new EventSource(EVENTS_ENDPOINT)
-      source.addEventListener('message', (event: MessageEvent<string>) => {
-        let frame: PluginsEventFrame
-        try {
-          frame = JSON.parse(event.data) as PluginsEventFrame
-        } catch {
-          // Wire boundary: a malformed dev-channel frame is dropped loudly.
-          ctx.logger.warn(`client-hmr: unparseable event frame: ${event.data}`)
-          return
-        }
-        handle(frame)
-      })
-    }
-    void open()
-    return () => {
-      closed = true
-      source?.close()
-    }
+      const parsed = parsePluginsEventFrame(value)
+      if (parsed.kind === 'invalid') {
+        ctx.logger.warn(`client-hmr: invalid event frame: ${event.data}`)
+      } else if (parsed.kind === 'frame') {
+        handle(parsed.frame)
+      }
+    })
+    return () => { source.close() }
   }, 'client-hmr: event source')
 }

@@ -35,6 +35,8 @@ const COLLAPSE_SETTLE_MS = 150
  */
 const SCROLLBAR_LINGER_MS = 2000
 
+/** Format complete-build metadata for the local brand badge. */
+
 /**
  * Render the sidebar column shell: activity rail + view panel.
  * @param props - composed slot props (runtime share + injected callbacks, contract/slots.ts).

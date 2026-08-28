@@ -12,8 +12,11 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
+} from '@deepseek-ai/dsh-client-ui-slots'
 import { computeColumns, computeEqualColumns, EQUAL_SPLIT_MIN_VIEWPORT, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT, WORKBENCH_MINS } from './columns.ts'
+import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -22,6 +25,7 @@ export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'workbench.viewer' | 'workbench.bottom' | 'shell.overlay' | 'workspace.shell'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
+  & PropsLocale<'common'>
 
 
 /** Center column grid item (session-body building block). */
@@ -137,6 +141,8 @@ export function AppFrame({
   useSessions,
   actions,
   renderSlot,
+  SessionProvider,
+  t,
 }: AppFrameProps) {
   // Detached workspace window (?dshWindow=workspace): the whole window is
   // owned by a workspace plugin (e.g. dsh-workspace) through the
@@ -159,6 +165,10 @@ export function AppFrame({
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
+  })
+  const documentTitle = useSessions((s) => {
+    const current = s.current
+    return current === undefined ? undefined : s.byId[current]?.title
   })
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState(() => window.innerWidth)
@@ -260,7 +270,7 @@ export function AppFrame({
   const onBottomDrag = useCallback((dy: number) => {
     actions.setBottom(bottomBase.current - dy)
   }, [actions])
-
+  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
 
   return (
     <div
@@ -276,6 +286,10 @@ export function AppFrame({
       data-workbench={panels.sidebarView === 'workbench' || undefined}
       data-dragging={dragging || undefined}
     >
+      <DocumentTitle
+        productTitle={productTitle}
+        {...documentTitle === undefined ? {} : { title: documentTitle }}
+      />
       <div className={css.sidebarCol}>
         {/* Render-site slot call with live concession output: a closed
             sidebar keeps the mounted slot at the compact-rail width, and the
@@ -292,15 +306,12 @@ export function AppFrame({
         {/* Both column occupants stay at fixed tree positions from first
             paint — no loading gate: a bare status line reads worse than
             the shell's own pending rendering. The conversation
-            is session-maybe; the strict details entry naturally renders
-            empty while no session is current. */}
-        {/* The conversation keeps its DOM position in every view: while the
-            workbench view is active, CSS grid-column reorders it to the right
-            track and the viewer renders in the center track, so the
-            conversation keeps its React identity across the swap. The
-            details seat only fills the right column outside the workbench. */}
-        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
-        <DetailsColumn>{panels.sidebarView === 'workbench' ? renderSlot('workbench.viewer', {}) : renderSlot('details', {})}</DetailsColumn>
+            remains session-maybe; SessionProvider withholds the strict details
+            entry while no session is current. */}
+          <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
+          <DetailsColumn>
+            {panels.sidebarView === 'workbench' ? renderSlot('workbench.viewer', {}) : <SessionProvider>{renderSlot('details', {})}</SessionProvider>}
+          </DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
