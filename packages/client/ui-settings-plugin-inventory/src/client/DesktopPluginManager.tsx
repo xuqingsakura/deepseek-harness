@@ -317,7 +317,7 @@ export function DesktopPluginManager({ t, entries, onChanged }: DesktopPluginMan
                         {plugin.enabled ? t('enabledTag') : t('disabledTag')}
                       </span>
                     ) : null}
-                    {phaseKey !== null ? (
+                    {plugin.enabled && phaseKey !== null ? (
                       <span className={css.phaseTag} data-phase={phase}>{t(phaseKey)}</span>
                     ) : null}
                   </span>
