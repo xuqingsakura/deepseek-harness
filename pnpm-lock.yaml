@@ -578,6 +578,9 @@ importers:
       '@deepseek-ai/dsh-client-modules':
         specifier: workspace:^
         version: link:../../../packages/client/modules
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:^
+        version: link:../../../packages/client/store
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:^
         version: link:../../../packages/test-support/client-runtime
@@ -1121,6 +1124,12 @@ importers:
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:^
         version: link:../../../packages/interaction/user-questions
+      '@deepseek-ai/dsh-util-time':
+        specifier: workspace:^
+        version: link:../../../packages/util/time
+      '@deepseek-ai/dsh-util-workspace-path':
+        specifier: workspace:^
+        version: link:../../../packages/util/workspace-path
       '@deepseek-ai/dsh-web':
         specifier: workspace:^
         version: link:../../../packages/web/web
