@@ -202,18 +202,22 @@ export async function discoverModels(
   request: LlmModelDiscoveryOperation,
   storedProfile?: () => StoredModelDiscoveryProfile | undefined,
 ): Promise<readonly LlmDiscoveredModel[]> {
-  // A catalog route already has its answer, and a better one: the installed
-  // entries carry context windows and output caps no listing endpoint reports.
-  if (request.provider !== undefined) {
-    const installed = catalogModels(request.provider)
-    if (installed.size > 0) {
-      return [...installed.values()].map(model => ({
-        id: model.id,
-        name: model.name,
-        contextWindow: model.contextWindow,
-        maxTokens: model.maxTokens,
-      }))
-    }
+  const installed = request.provider === undefined ? undefined : catalogModels(request.provider)
+  // Prefer the live endpoint whenever the draft names a readable base URL: a
+  // provider's shipped catalog snapshot lags what it serves today (NVIDIA
+  // rotates models), so the wire is authoritative for the available set and the
+  // catalog only enriches an OpenAI /models reply. A catalog route with no
+  // readable endpoint still answers from the catalog.
+  const api = request.api ?? 'openai-completions'
+  const canProbe = request.baseURL !== undefined && request.baseURL.length > 0
+    && LISTABLE_PROTOCOLS.has(api)
+  if (installed !== undefined && installed.size > 0 && !canProbe) {
+    return [...installed.values()].map(model => ({
+      id: model.id,
+      name: model.name,
+      contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens,
+    }))
   }
   if (request.baseURL === undefined || request.baseURL.length === 0) {
     throw new LlmError(
@@ -228,7 +232,6 @@ export async function discoverModels(
   // the action from the case it exists for. The cost is a misdirected message
   // when the endpoint speaks something else (an Anthropic gateway answers 401,
   // which reads as a credential problem), and hand-entry remains the way out.
-  const api = request.api ?? 'openai-completions'
   if (!LISTABLE_PROTOCOLS.has(api)) {
     throw new LlmError(
       `pi-ai protocol "${api}" has no model listing this build can read; enter this provider's models by hand`,
@@ -285,5 +288,17 @@ export async function discoverModels(
   } catch (error: unknown) {
     throw new LlmError(`${url} did not answer with JSON`, 'DISCOVERY_FAILED', { cause: error })
   }
-  return readListing(body)
+    const live = readListing(body)
+  if (installed === undefined || installed.size === 0) return live
+  // Enrich the live set with catalog metadata where both agree on the id.
+  return live.map(m => {
+    const cat = installed.get(m.id)
+    if (cat === undefined) return m
+    return {
+      id: m.id,
+      ...(m.name === undefined && cat.name !== undefined ? { name: cat.name } : {}),
+      ...(m.contextWindow === undefined && cat.contextWindow !== undefined ? { contextWindow: cat.contextWindow } : {}),
+      ...(m.maxTokens === undefined && cat.maxTokens !== undefined ? { maxTokens: cat.maxTokens } : {}),
+    }
+  })
 }
