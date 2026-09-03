@@ -39,3 +39,19 @@
 - 现象：在已有工作区（如“测试”）下点“+”新增会话 → 要么落到未绑定的「选择工作区」空状态，要么点击无反应。
 - 根因：fork `dsh-workspace` 工作台渲染的工作区列表与标准 `@deepseek-ai/dsh-workspace`（workspace-controller registry）脱节；`connectWorkspace(workspaceId)` 在标准 registry 里找不到该工作区即抛错/不绑定。
 - 决定：**不在当前版本单独打补丁**。随 `dsh-workspace` 一并放弃，在 alpha.5 合并 + 桌面重适配（采用标准工作区/会话流程）后于 **rc.66** 统一验证并修复。
+
+## 进展更新（2026-09-03）
+
+- ✅ 合并 upstream alpha.5（`2c7a3e8ae1`），12 处冲突全部按「A 贴合 upstream」解决；新增 fork 本地提交 `1d31186808`（重适配/编译修复）。
+- ✅ 备份分支 `backup/pre-upstream-alpha5-merge-2026-09-03`；会话/工作区/设置已备份到 `%APPDATA%\dsh-desktop\userdata-backup-20260903-pre-alpha5`。
+- ✅ 会话数据兼容：当前与 alpha.5 的 `SESSION_FORMAT_VERSION` 均为 0，旧 `session.jsonl.zstd` 可被读取，无需自研转换器。
+- ✅ 修复构建环境：同步 `pnpm install --ignore-scripts`、补回 `@standard-schema/spec` 的 `.d.ts`（registry 拉取）；host 与 client **均通过 `tsc -b`**。
+- ✅ 移除 fork 工作台实现包 `packages/host/workbench`、`packages/client/ui-workbench` 及其依赖/引用/tsconfig 引用（随 `dsh-workspace` 放弃，贴合 upstream）。
+
+## 待办（后续）
+
+- [ ] `pnpm run build`（tsdown 打包）验证完整构建。
+- [ ] 桌面端重适配：`apps/desktop` 在 alpha.5 上编译、移除 `dsh-workbench` 插件、更新 web profile。
+- [ ] 打包 rc.66。
+- [ ] 推到 fork origin（不建 PR）。
+- [ ] rc.66 中验证「已有工作区下新增会话绑定」。

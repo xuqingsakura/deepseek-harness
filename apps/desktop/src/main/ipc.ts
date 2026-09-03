@@ -14,7 +14,6 @@ import { join, resolve } from 'node:path'
 import { harnessHome } from './config.ts'
 import { hostModeInfo, writeHostMode } from './host-mode.ts'
 import { state } from './state.ts'
-import { createWorkspaceWindow, restoreMainWindow } from './windows.ts'
 import { getUpdateState, checkForUpdates, quitAndInstall } from './updater.ts'
 import { migrateWebData, type MigrateOptions } from '../migrate-web-data.ts'
 import {
@@ -24,19 +23,6 @@ import {
 
 /** 注册桌面端全部 IPC 处理器与 API 流桥（应用生命周期内只需调用一次）。 */
 export function registerIpc(): void {
-  // Detached workspace window (VSCode-style workbench mode): the web UI reads ?dshWindow=workspace.
-  ipcMain.handle('dsh:open-workbench-window', (_event, sessionId: unknown) => {
-    createWorkspaceWindow(typeof sessionId === 'string' ? sessionId : undefined)
-  })
-
-  // 工作台窗口「回到原桌面」：显示主窗口并强制关闭工作台窗口。
-  ipcMain.handle('dsh:leave-workbench', () => {
-    // 恢复主窗口（若进入工作台时卸载过渲染器会重载），再关闭工作台窗口。
-    restoreMainWindow()
-    if (state.workbenchWindow !== undefined && !state.workbenchWindow.isDestroyed()) {
-      state.workbenchWindow.destroy()
-    }
-  })
 
   // 宿主运行模式诊断：供设置界面展示当前模式与 child 是否可用（只读，生效需重启）。
   ipcMain.handle('dsh:get-host-mode', () => hostModeInfo())

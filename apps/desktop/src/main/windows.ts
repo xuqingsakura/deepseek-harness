@@ -2,7 +2,7 @@
  * 桌面端主窗口与工作台窗口（Phase 0.1 拆分）。
  *
  * 从 main.ts 提取：创建主窗口（加载宿主 URL，支持窗口状态恢复、藏到托盘、崩溃重载、外链外开）
- * 与分离的 VSCode 风格工作台窗口（工作台模式）。二者共享 `state` 里的工作台窗口与托盘状态。
+ * 与系统托盘状态。
  * @module @deepseek-ai/dsh-desktop/main/windows
  */
 
@@ -10,7 +10,7 @@ import { BrowserWindow, Notification, nativeTheme, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { APP_ICON, PRELOAD, harnessHome } from './config.ts'
 import { debugLog } from './log.ts'
-import { state, releaseMainRendererInWorkbench } from './state.ts'
+import { state } from './state.ts'
 import { splashDataUrl } from '../splash.ts'
 import { loadWindowState, saveWindowState, onVisibleDisplay } from './window-state.ts'
 
@@ -32,25 +32,7 @@ function findMainWindow(): BrowserWindow | undefined {
   if (ref !== undefined && !ref.isDestroyed()) return ref
   // URL 兜底：挑一个非工作台的 http(s) 窗口。
   return BrowserWindow.getAllWindows().find(w => !w.isDestroyed()
-    && w !== state.workbenchWindow
     && /^https?:\/\//.test(w.webContents.getURL()))
-}
-
-/**
- * 恢复主窗口：显示并聚焦；若进入工作台时卸载过渲染器（当前为 about:blank），
- * 从记录的地址重载；已显示同一地址时则幂等跳过，避免重复加载导致闪烁。
- */
-function restoreMainWindow(): void {
-  const mainWin = findMainWindow()
-  if (mainWin === undefined) return
-  if (mainWin.isMinimized()) mainWin.restore()
-  if (!mainWin.isVisible()) mainWin.show()
-  mainWin.focus()
-  const saved = state.mainWindowUrl
-  const current = mainWin.webContents.getURL()
-  if (saved !== undefined && saved !== '' && /^https?:\/\//.test(saved) && current !== saved) {
-    void mainWin.loadURL(saved)
-  }
 }
 
 function createMainWindow(url: string | undefined, onClosed: () => void, isSmoke: boolean): BrowserWindow {
@@ -175,108 +157,4 @@ function createMainWindow(url: string | undefined, onClosed: () => void, isSmoke
   return window
 }
 
-/**
- * 打开（或聚焦）绑定某一会话的分离工作台窗口（VSCode 风格工作台模式）。
- *
- * 窗口加载同样的宿主 origin，并带 `?dshWindow=workspace&session=`，让 web UI 直接进入
- * dsh-workspace 插件的整窗布局；共享的进程内宿主与同源 localStorage 使两个窗口互操作。
- * 进入工作台模式会隐藏主窗口；关闭工作台窗口会恢复主窗口。会话切换通过共享的 sessions 服务。
- *
- * @param sessionId - 要在工作台中打开的会话；缺省则沿用 URL 自身默认（持久化的当前会话）。
- * @returns 创建（或已存在）的工作台窗口。
- */
-function createWorkspaceWindow(sessionId: string | undefined): BrowserWindow {
-  if (state.workbenchWindow !== undefined && !state.workbenchWindow.isDestroyed()) {
-    if (!state.workbenchWindow.isVisible()) state.workbenchWindow.show()
-    state.workbenchWindow.focus()
-    return state.workbenchWindow
-  }
-  const main = findMainWindow()
-  const base = main === undefined ? undefined : main.webContents.getURL()
-  const url = base === undefined ? undefined : new URL(base)
-  const saved = loadWindowState('window-state-workspace')
-  const window = new BrowserWindow({
-    ...(saved !== undefined ? { width: saved.width, height: saved.height } : { width: 1440, height: 900 }),
-    ...(saved !== undefined && saved.x !== undefined && saved.y !== undefined && onVisibleDisplay(saved.x, saved.y)
-      ? { x: saved.x, y: saved.y } : {}),
-    minWidth: 940,
-    minHeight: 600,
-    show: false,
-    frame: false,
-    backgroundColor: initialBackground(),
-    ...(existsSync(APP_ICON) ? { icon: APP_ICON } : {}),
-    webPreferences: {
-      preload: PRELOAD,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  })
-  window.once('ready-to-show', () => {
-    if (saved?.maximized === true) window.maximize()
-    window.show()
-  })
-  // Persist workbench geometry (debounced) so a relaunch restores its layout.
-  let wsSaveTimer: ReturnType<typeof setTimeout> | undefined
-  const persistWs = (): void => {
-    if (window.isDestroyed()) return
-    if (wsSaveTimer !== undefined) clearTimeout(wsSaveTimer)
-    wsSaveTimer = setTimeout(() => {
-      const bounds = window.getBounds()
-      void saveWindowState({
-        width: bounds.width,
-        height: bounds.height,
-        ...(bounds.x !== 0 || bounds.y !== 0 ? { x: bounds.x, y: bounds.y } : {}),
-        ...(window.isMaximized() ? { maximized: true } : {}),
-      }, 'window-state-workspace')
-    }, 500)
-  }
-  window.on('resize', persistWs)
-  window.on('move', persistWs)
-  // 工作台窗口点 X：隐藏到系统托盘（不关闭、不恢复主窗口）。真正退出用「回到原桌面」按钮。
-  window.on('close', (event) => {
-    if (!state.quitting) {
-      event.preventDefault()
-      window.hide()
-    }
-  })
-  window.on('closed', () => {
-    if (wsSaveTimer !== undefined) clearTimeout(wsSaveTimer)
-    if (state.workbenchWindow === window) state.workbenchWindow = undefined
-    // 离开工作台模式：恢复主窗口（进入时卸载过渲染器会重载）。工作台点 X 只是隐藏，
-    // 只有真正关闭（回到原桌面/退出）才会走到这里。
-    restoreMainWindow()
-  })
-  if (url !== undefined) {
-    url.searchParams.set('dshWindow', 'workspace')
-    if (sessionId !== undefined && sessionId !== '') url.searchParams.set('session', sessionId)
-    void window.loadURL(url.toString())
-  } else {
-    void window.loadURL(splashDataUrl(harnessHome()))
-  }
-  // Keep the custom title bar's maximize/restore glyph in sync with the real
-  // window state (the shared preload listens for dsh:maximized).
-  window.webContents.on('did-finish-load', () => {
-    if (!window.isDestroyed()) window.webContents.send('dsh:maximized', window.isMaximized())
-  })
-  const publishWorkspaceMaximized = (): void => {
-    if (!window.isDestroyed()) window.webContents.send('dsh:maximized', window.isMaximized())
-  }
-  window.on('maximize', publishWorkspaceMaximized)
-  window.on('unmaximize', publishWorkspaceMaximized)
-  // Entering workspace mode hides the main window (the detached window is now
-  // the user's active surface).
-  const mainWin = findMainWindow()
-  if (mainWin !== undefined && !mainWin.isDestroyed() && mainWin !== window) {
-    // 记录主窗口地址并隐藏；可选地卸载渲染器释放内存（默认关闭，需 desktop-settings.json 的 releaseMainRenderer=true）。
-    state.mainWindowUrl = mainWin.webContents.getURL()
-    mainWin.hide()
-    if (releaseMainRendererInWorkbench()) {
-      void mainWin.webContents.loadURL('about:blank')
-    }
-  }
-  state.workbenchWindow = window
-  return window
-}
-
-export { createMainWindow, createWorkspaceWindow, findMainWindow, restoreMainWindow }
+export { createMainWindow, findMainWindow }

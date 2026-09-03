@@ -15,17 +15,6 @@ import { state } from './state.ts'
  * @param window - 普通主窗口（工作台模式外使用）。
  */
 function toggleWindow(window: BrowserWindow | undefined): void {
-  // 工作台模式下，托盘点击应聚焦/切换工作台窗口，避免同时显示主窗口。
-  if (state.workbenchWindow !== undefined && !state.workbenchWindow.isDestroyed()) {
-    if (state.workbenchWindow.isVisible() && !state.workbenchWindow.isMinimized()) {
-      state.workbenchWindow.hide()
-    } else {
-      if (state.workbenchWindow.isMinimized()) state.workbenchWindow.restore()
-      state.workbenchWindow.show()
-      state.workbenchWindow.focus()
-    }
-    return
-  }
   if (window === undefined) return
   if (window.isVisible() && !window.isMinimized()) {
     window.hide()
