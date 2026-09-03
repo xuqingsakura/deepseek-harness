@@ -134,11 +134,11 @@ describe('PluginInventoryGateway', () => {
     // private `_error`; the projection serializes it for display.
     ;(fiber as unknown as { _error: unknown })._error = new Error('boom')
     ;(fiber as unknown as { state: number }).state = 3 // FiberState.FAILED
-    const first = inventory.list().entries.find(entry => entry.entryId === activeId)
+    const first = (await inventory.list()).entries.find(entry => entry.entryId === activeId)
     expect(first?.fiberPhase).toBe('failed')
     expect(first?.error).toBe('boom')
     ;(fiber as unknown as { _error: unknown })._error = 'raw-failure'
-    const second = inventory.list().entries.find(entry => entry.entryId === activeId)
+    const second = (await inventory.list()).entries.find(entry => entry.entryId === activeId)
     expect(second?.error).toBe('raw-failure')
   })
 })
