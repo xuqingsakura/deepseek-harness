@@ -93,7 +93,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  height: 60px;
+  height: 72px;
   padding: 8px 0 8px 4px;
   margin-bottom: 8px;
   box-sizing: border-box;
@@ -128,9 +128,9 @@
    spacing, and height so either occupant can vary in width. */
 .brandIdentity {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 24px;
+  align-items: flex-start;
+  gap: 10px;
+  height: auto;
   min-width: 0;
 }
 
@@ -143,14 +143,15 @@
 
 .brandName {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
-  height: 24px;
-  font-size: 18px;
+  height: auto;
+  font-size: 20px;
   font-weight: 600;
   line-height: 24px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .fallbackBrandName {
@@ -165,14 +166,14 @@
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 1px;
-  height: 24px;
+  gap: 3px;
+  height: auto;
   white-space: nowrap;
 }
 
 .localBuildTitle {
-  font-size: 12px;
-  line-height: 13px;
+  font-size: 20px;
+  line-height: 24px;
   letter-spacing: 0;
 }
 
@@ -232,15 +233,15 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  height: 10px;
-  padding: 0 3px;
+  height: auto;
+  padding: 1px 4px;
   border-radius: 2px;
   color: var(--dsw-alias-label-primary-inverted);
   background: var(--dsw-alias-label-primary);
   font-family: var(--ds-font-family-code);
-  font-size: 6px;
+  font-size: 10px;
   font-weight: 500;
-  line-height: 10px;
+  line-height: 14px;
   white-space: nowrap;
 }
 
