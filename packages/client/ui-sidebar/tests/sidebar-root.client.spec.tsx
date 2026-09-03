@@ -1,51 +1,53 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import type {
   SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
   SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
+import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 
 // English-dictionary translate stub: the shell renders the same copy the
 // assertions below query by accessible name.
-const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
+const t: SidebarRootComponentProps['t'] = key =>
+  (en as Record<string, string>)[key] ?? (commonEn as Record<string, string>)[key] ?? key
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllEnvs()
   vi.useRealTimers()
 })
 
 // The shell never reads the global hooks itself, but they ride the standard
 // props share; stub them as never-called functions.
 const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
-const noAttention = new Map()
-const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention as never)
+type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSessionPendingInteraction']>[0]>[0]
+const noAttention: AttentionSnapshot = new Map()
+const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
 
-function mountShell({ collapsed = false, width = 300, initialView = 'default', workbench = false }: { collapsed?: boolean; width?: number; initialView?: 'default' | 'workbench'; workbench?: boolean } = {}) {
+function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
-  const setSidebarView = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
-  let workbenchOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
-  let current = { collapsed, width, view: initialView, workbench }
+  const brandMark = <span data-testid="custom-brand-mark">M</span>
+  const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
+  let current = { collapsed, width }
   const root = () => (
     <SidebarRoot
-      collapsed={current.collapsed} width={current.width} view={current.view}
-      useSessions={neverHook} useWorkspaces={neverHook}
-      useSessionPendingInteraction={useSessionPendingInteraction}
-      startSession={startSession} toggleSidebar={toggleSidebar}
-      setSidebarView={setSidebarView}
-      workbenchAvailable={() => current.workbench}
-      subscribeWorkbench={() => () => {}}
-      t={t}
+      collapsed={current.collapsed} width={current.width}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
         owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
+        if (key === 'sidebar.brand.mark') return brandMark
+        if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.settings') {
           settingsOwner = owner
           return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -53,10 +55,6 @@ function mountShell({ collapsed = false, width = 300, initialView = 'default', w
         if (key === 'sidebar.footer.action') {
           footerActionOwner = owner
           return <div data-testid="footer-action-seat" data-wide={owner.wide} />
-        }
-        if (key === 'sidebar.workbench') {
-          workbenchOwner = owner as SidebarSectionOwnerProps
-          return <div data-testid="workbench-region" data-wide={owner.wide} />
         }
         regionOwner = owner as SidebarSectionOwnerProps
         return <div data-testid="region" data-wide={owner.wide} />
@@ -67,14 +65,9 @@ function mountShell({ collapsed = false, width = 300, initialView = 'default', w
   return {
     startSession,
     toggleSidebar,
-    setSidebarView,
     regionOwner: () => {
       if (regionOwner === undefined) throw new Error('region owner not rendered')
       return regionOwner
-    },
-    workbenchOwner: () => {
-      if (workbenchOwner === undefined) throw new Error('workbench owner not rendered')
-      return workbenchOwner
     },
     settingsOwner: () => {
       if (settingsOwner === undefined) throw new Error('settings owner not rendered')
@@ -92,83 +85,94 @@ function mountShell({ collapsed = false, width = 300, initialView = 'default', w
 }
 
 describe('SidebarRoot shell', () => {
-  it('routes New Session and the column toggle', () => {
+  it('routes New Session (capsule + wordmark) and the column toggle', () => {
     const b = mountShell()
-    // Expanded, the panel capsule starts a session.
+    expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
+    expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
+    // Expanded, both the wordmark and the capsule start a session.
     const starters = screen.getAllByRole('button', { name: 'New session' })
-    expect(starters).toHaveLength(1)
+    expect(starters).toHaveLength(2)
     for (const button of starters) fireEvent.click(button)
-    expect(b.startSession).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Collapse sidebar' })[0]!)
+    expect(b.startSession).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
-  it('the foot collapse button toggles back open from the collapsed rail', () => {
-    const b = mountShell()
-    const collapseButtons = screen.getAllByRole('button', { name: 'Collapse sidebar' })
-    // The foot button is the last of the two activity-bar toggles.
-    const foot = collapseButtons[collapseButtons.length - 1]!
-    fireEvent.click(foot)
-    expect(b.toggleSidebar).toHaveBeenCalledOnce()
-    b.rerender({ collapsed: true })
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open sidebar' })[0]!)
-    expect(b.toggleSidebar).toHaveBeenCalledTimes(2)
+  it('renders generic brand fallbacks when no package fills the slots', () => {
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
+    vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+    const { container } = render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+
+    expect(screen.getByText('DSH Local Build')).toBeTruthy()
+    expect(screen.getByText('1.2.3-rc.4-0123456-dirty')).toBeTruthy()
+    expect(container.querySelector('svg')).not.toBeNull()
+  })
+
+  it.each([
+    [{ DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3'],
+    [{ DSH_CLIENT_COMMIT_HASH: 'abcdef0', DSH_CLIENT_VERSION: '1.2.3' }, '1.2.3-abcdef0'],
+  ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
+    for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
+    render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+
+    expect(screen.getByText('DSH Local Build')).toBeTruthy()
+    expect(screen.getByText(expected)).toBeTruthy()
+  })
+
+  it('retains the local-build fallback without complete build metadata', () => {
+    render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
+      renderSlot={((_key: string, _owner: unknown, options?: { fallback?: ReactNode }) =>
+        options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
+    />)
+
+    expect(screen.getByText('DSH Local Build')).toBeTruthy()
   })
 
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
     const b = mountShell()
     expect(b.regionOwner().wide).toBe(true)
-    // Settings now rides the activity rail (always reachable), so it never
-    // sees the wide panel flag; footer actions stay in the panel foot.
-    expect(b.settingsOwner().wide).toBe(false)
+    // The settings seat rides the same wide flag (ui-settings renders the row).
+    expect(b.settingsOwner().wide).toBe(true)
     expect(b.footerActionOwner().wide).toBe(true)
     // Expanded: the request is a no-op (no accidental collapse).
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).not.toHaveBeenCalled()
   })
 
-  it('keeps the panel mounted through collapse, then unmounts at settle', () => {
+  it('keeps the region mounted through collapse and expands on its request', () => {
     vi.useFakeTimers()
     const b = mountShell()
     b.rerender({ collapsed: true })
-    // Wide content survives the crossfade window.
+    // Wide content survives the crossfade window, then settles into the rail.
     expect(b.regionOwner().wide).toBe(true)
-    expect(screen.getByTestId('region')).toBeTruthy()
     vi.advanceTimersByTime(200)
     b.rerender({})
-    // At settle the panel unmounts; the activity rail remains.
-    expect(screen.queryByTestId('region')).toBeNull()
-    expect(screen.getAllByRole('button', { name: 'Open sidebar' })[0]).toBeTruthy()
-    // The stale region owner's expand request still routes through the shell.
+    expect(b.regionOwner().wide).toBe(false)
+    expect(b.footerActionOwner().wide).toBe(false)
+    expect(screen.getByTestId('region')).toBeTruthy()
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
-  it('renders statically collapsed on a cold start (rail only, no panel)', () => {
-    mountShell({ collapsed: true })
-    expect(screen.queryByTestId('region')).toBeNull()
-    expect(screen.getAllByRole('button', { name: 'Open sidebar' })[0]).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
-  })
-
-  it('shows the workspace browser by default and swaps to the file tree on the workbench view', () => {
-    const b = mountShell()
-    expect(screen.getByTestId('region')).toBeTruthy()
-    expect(screen.queryByTestId('workbench-region')).toBeNull()
-    b.rerender({ view: 'workbench' })
-    expect(screen.getByTestId('workbench-region')).toBeTruthy()
-    expect(screen.queryByTestId('region')).toBeNull()
-    expect(b.workbenchOwner().wide).toBe(true)
-  })
-
-  it('hides the workbench icon until the workbench seat is registered, then routes clicks to setSidebarView', () => {
-    const b = mountShell()
-    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
-    b.rerender({ workbench: true })
-    expect(screen.getByRole('button', { name: 'Files' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Files' }))
-    expect(b.setSidebarView).toHaveBeenCalledWith('workbench')
-    fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }))
-    expect(b.setSidebarView).toHaveBeenCalledWith('default')
+  it('renders statically collapsed on a cold start (no crossfade classes)', () => {
+    const b = mountShell({ collapsed: true })
+    expect(b.regionOwner().wide).toBe(false)
+    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
   })
 })

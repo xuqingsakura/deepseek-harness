@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, computeEqualColumns, EQUAL_SPLIT_MIN_VIEWPORT, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT, WORKBENCH_MINS } from './columns.ts'
+import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
@@ -23,10 +23,9 @@ import css from './AppFrame.module.css'
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'workbench.viewer' | 'workbench.bottom' | 'shell.overlay' | 'workspace.shell'>
+  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'common'>
-
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode }) {
@@ -37,7 +36,6 @@ function CenterColumn(props: { children?: ReactNode }) {
 function DetailsColumn(props: { children?: ReactNode }) {
   return <div className={css.detailsCol}>{props.children}</div>
 }
-
 
 /**
  * One drag handle: pointer capture, rAF-throttled dx reports against the drag-start origin.
@@ -89,52 +87,6 @@ function DragHandle(props: { side: 'sidebar' | 'details'; left: number; onStart:
   )
 }
 
-/** One vertical drag handle for the bottom panel: pointer capture, rAF-throttled dy reports. */
-function VerticalHandle(props: { top: number; onStart: () => void; onDrag: (dy: number) => void; onEnd: () => void }) {
-  const [dragging, setDragging] = useState(false)
-  const origin = useRef(0)
-  const latest = useRef(0)
-  const frame = useRef<number | null>(null)
-  const callbacks = useRef({ onStart: props.onStart, onDrag: props.onDrag, onEnd: props.onEnd })
-  callbacks.current = { onStart: props.onStart, onDrag: props.onDrag, onEnd: props.onEnd }
-
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    origin.current = e.clientY
-    latest.current = e.clientY
-    callbacks.current.onStart()
-    setDragging(true)
-  }, [])
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    latest.current = e.clientY
-    frame.current ??= requestAnimationFrame(() => {
-      frame.current = null
-      callbacks.current.onDrag(latest.current - origin.current)
-    })
-  }, [])
-  const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    e.currentTarget.releasePointerCapture(e.pointerId)
-    if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null }
-    callbacks.current.onDrag(latest.current - origin.current)
-    setDragging(false)
-    callbacks.current.onEnd()
-  }, [])
-
-  return (
-    <div
-      className={css.verticalHandle}
-      style={{ top: props.top }}
-      data-dragging={dragging || undefined}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-    />
-  )
-}
-
 /** The three-column frame (see module doc). */
 export function AppFrame({
   useStore,
@@ -144,23 +96,6 @@ export function AppFrame({
   SessionProvider,
   t,
 }: AppFrameProps) {
-  // Detached workspace window (?dshWindow=workspace): the whole window is
-  // owned by a workspace plugin (e.g. dsh-workspace) through the
-  // 'workspace.shell' seat. The three-column frame is skipped entirely; the
-  // owner receives the conversation render bridge so it can place the
-  // original conversation (ui-conversation's ConversationRoot) in its own
-  // layout. A missing occupant renders a quiet fallback instead of a blank
-  // shell (the plugin installs lazily and may be absent in a bare web host).
-  const workspaceWindow = new URLSearchParams(window.location.search).get('dshWindow') === 'workspace'
-  if (workspaceWindow) {
-    return (
-      <div className={css.workspaceShell}>
-        {renderSlot('workspace.shell', {
-          renderConversation: () => renderSlot('conversation', {}),
-        })}
-      </div>
-    )
-  }
   const panels = useStore(s => s)
   const detailsSession = useSessions((s) => {
     const current = s.current
@@ -172,14 +107,12 @@ export function AppFrame({
   })
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState(() => window.innerWidth)
-  const [frameHeight, setFrameHeight] = useState(() => window.innerHeight)
 
   const lastSession = useRef(detailsSession)
   useLayoutEffect(() => {
     if (detailsSession === undefined) return
     if (lastSession.current !== undefined && lastSession.current !== detailsSession) {
       actions.closeDetails()
-      actions.closeWorkbench()
     }
     lastSession.current = detailsSession
   }, [actions, detailsSession])
@@ -193,9 +126,8 @@ export function AppFrame({
     const observer = new ResizeObserver(() => {
       raf ??= requestAnimationFrame(() => {
         raf = null
-        const box = el.getBoundingClientRect()
-        if (box.width > 0) setViewport(box.width)
-        if (box.height > 0) setFrameHeight(box.height)
+        const width = el.getBoundingClientRect().width
+        if (width > 0) setViewport(width)
       })
     })
     observer.observe(el)
@@ -213,38 +145,11 @@ export function AppFrame({
   // absorbs the squeeze.
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
-  // The workbench view keeps its file tree on screen even on narrow
-  // viewports: only an explicit user collapse closes it (the narrow
-  // auto-collapse stays reserved for the workspace browser).
-  const sidebarCollapsed = panels.sidebarView === 'workbench'
-    ? panels.sidebar === 0
-    : narrow ? !panels.narrowExpanded : panels.sidebar === 0
+  const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
-  // The workbench view carries the conversation in the details column, so
-  // its width is the plain panel preference — never gated on the
-  // tool-details session availability (a blank flag may read undefined and
-  // must not collapse the conversation column). Outside the workbench the
-  // details seat stays session-gated as before.
-  const detailsWidth = panels.sidebarView === 'workbench'
-    ? panels.details
-    : (detailsSession === undefined ? 0 : panels.details)
-  // Workbench columns concede below the conversation frame (file tree and
-  // viewer shrink; the conversation column survives narrow viewports). The
-  // workbench view defaults to an equal 1:1:1 split until the user drags a
-  // handle or toggles a panel (stores.ts workbenchEqual); below the equal-split
-  // floor it falls back to the pixel concession chain.
-  const workbenchView = panels.sidebarView === 'workbench'
-  const equalSplit = workbenchView && panels.workbenchEqual && viewport >= EQUAL_SPLIT_MIN_VIEWPORT
-  const cols = equalSplit
-    ? computeEqualColumns(viewport)
-    : computeColumns(
-      viewport,
-      sidebarPreference,
-      detailsWidth,
-      workbenchView ? WORKBENCH_MINS : undefined,
-    )
+  const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
   const colsRef = useRef(cols)
   colsRef.current = cols
 
@@ -265,25 +170,15 @@ export function AppFrame({
   const onDetailsDrag = useCallback((dx: number) => {
     actions.setDetails(detailsBase.current - dx)
   }, [actions])
-  const bottomBase = useRef(0)
-  const onBottomStart = useCallback(() => { bottomBase.current = panels.bottom; setDragging(true) }, [panels.bottom])
-  const onBottomDrag = useCallback((dy: number) => {
-    actions.setBottom(bottomBase.current - dy)
-  }, [actions])
   const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
 
   return (
     <div
       ref={frameRef}
       className={css.frame}
-      style={{
-        gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px`,
-        gridTemplateRows: panels.bottom > 0 ? `minmax(0, 1fr) ${panels.bottom}px` : undefined,
-      }}
+      style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={cols.details === 0 || undefined}
-      data-bottom-collapsed={panels.bottom === 0 || undefined}
-      data-workbench={panels.sidebarView === 'workbench' || undefined}
       data-dragging={dragging || undefined}
     >
       <DocumentTitle
@@ -299,19 +194,18 @@ export function AppFrame({
         {renderSlot('sidebar', {
           collapsed: sidebarCollapsed,
           width: cols.sidebar,
-          view: panels.sidebarView,
         })}
       </div>
       <>
         {/* Both column occupants stay at fixed tree positions from first
             paint — no loading gate: a bare status line reads worse than
             the shell's own pending rendering. The conversation
-            remains session-maybe; SessionProvider withholds the strict details
+            is session-maybe; SessionProvider withholds the strict details
             entry while no session is current. */}
-          <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
-          <DetailsColumn>
-            {panels.sidebarView === 'workbench' ? renderSlot('workbench.viewer', {}) : <SessionProvider>{renderSlot('details', {})}</SessionProvider>}
-          </DetailsColumn>
+        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
+        <DetailsColumn>
+          <SessionProvider>{renderSlot('details', {})}</SessionProvider>
+        </DetailsColumn>
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
@@ -319,20 +213,6 @@ export function AppFrame({
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
       {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
       {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
-      {panels.bottom > 0 ? (
-        <>
-          <div className={css.bottomRow} data-workbench-bottom>
-            {renderSlot('workbench.bottom', { height: panels.bottom })}
-          </div>
-          <VerticalHandle
-            top={frameHeight - panels.bottom}
-            onStart={onBottomStart}
-            onDrag={onBottomDrag}
-            onEnd={onDragEnd}
-          />
-        </>
-      ) : null}
-
     </div>
   )
 }

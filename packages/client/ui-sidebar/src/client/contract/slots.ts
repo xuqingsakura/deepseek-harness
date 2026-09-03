@@ -17,13 +17,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
      * Brand mark rendered in the expanded brand row and collapsed rail.
-     * Declared by this package's sidebar entry; deployments may replace
+     * Declared by this package's `sidebar` entry; deployments may replace
      * the shell's fish fallback without replacing the surrounding controls.
      */
     'sidebar.brand.mark': { kind: 'single'; scope: 'root'; owner: SidebarBrandMarkOwnerProps }
     /**
      * Brand name rendered beside the expanded mark. Declared by this
-     * package's sidebar entry; the shell supplies a generic text fallback.
+     * package's `sidebar` entry; the shell supplies a generic text fallback.
      */
     'sidebar.brand.name': { kind: 'single'; scope: 'root'; owner: SidebarBrandNameOwnerProps }
     /**
@@ -33,12 +33,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * registers the browser.
      */
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
-    /**
-     * The workbench file-tree region, shown instead of the workspace browser
-     * when the active sidebar view is 'workbench'. Declared by this package's
-     * 'sidebar' entry; ui-workbench registers the file tree.
-     */
-    'sidebar.workbench': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -64,6 +58,7 @@ export interface SidebarBrandNameOwnerProps {
   /** Marker field: the occupant owns its own content and width. */
   children?: never
 }
+
 /**
  * Owner share of the browser hole — the only facts crossing the shell/region
  * boundary. Business data and actions arrive through the region's own inject.
@@ -104,12 +99,6 @@ export type SidebarRootInjected = {
   startSession: (workspaceId?: WorkspaceId) => void
   /** Toggle the sidebar column through the layout service. */
   toggleSidebar: () => void
-  /** Set the active sidebar view through the layout service (activity-bar semantics). */
-  setSidebarView: (view: 'default' | 'workbench') => void
-  /** Whether the workbench sidebar region has a registered occupant (the plugin is installed). */
-  workbenchAvailable: () => boolean
-  /** Subscribe to workbench availability changes (plugin install/uninstall). */
-  subscribeWorkbench: (fn: () => void) => () => void
 }
 
 /**
@@ -120,6 +109,10 @@ export type SidebarRootInjected = {
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
   & PropsRenderSlots<
-    | 'sidebar.brand.mark' | 'sidebar.brand.name' | 'sidebar.workspaces'
-    | 'sidebar.workbench' | 'sidebar.settings' | 'sidebar.footer.action'>
+    | 'sidebar.brand.mark'
+    | 'sidebar.brand.name'
+    | 'sidebar.workspaces'
+    | 'sidebar.settings'
+    | 'sidebar.footer.action'
+  >
   & SidebarRootInjected & PropsLocale<'sidebar'>

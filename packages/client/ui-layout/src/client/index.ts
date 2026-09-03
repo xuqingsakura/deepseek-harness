@@ -7,7 +7,6 @@
  * with the runtime sessions service. A second effect seats the theme
  * presenter, which projects ctx.theme snapshots onto document.body.
  */
-import type { ReactNode } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -75,28 +74,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
     /**
-     * The workbench file viewer/editor column, shown in the CENTER column
-     * while the workbench sidebar view is active (the conversation moves to
-     * the right details column). Declared by this package's 'root' entry;
-     * ui-workbench registers the file viewer. Root-scoped like the file tree:
-     * the occupant resolves the bound session through its own inject face, so
-     * the seat renders regardless of the strict-session outlet state.
-     *
-     * No owner props: the registrant supplies business data through its
-     * inject face, and ctx.layout owns whether the view is active.
-     */
-    'workbench.viewer': { kind: 'single'; scope: 'root'; owner: WorkbenchViewerOwnerProps }
-    /**
-     * The bottom terminal strip, shown in the frame's bottom row while the
-     * layout opens it (VSCode-style terminal panel). Declared by this
-     * package's 'root' entry; ui-workbench registers the terminal. Root-scoped
-     * like the viewer: the occupant resolves the bound session through its own
-     * inject face.
-     *
-     * Owner prop: the rendered bottom height in px (drag live value).
-     */
-    'workbench.bottom': { kind: 'single'; scope: 'root'; owner: WorkbenchBottomOwnerProps }
-    /**
      * Frame-wide floating layer, above every column and outside their scroll
      * containers. Deliberately generic and unowned by any feature: a badge, a
      * toast stack or a status pill all belong here, and entries order among
@@ -107,15 +84,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * `id` is added beside the shipped entries instead of replacing them.
      */
     'shell.overlay': { kind: 'list'; scope: 'root' }
-    /**
-     * The detached workspace window shell, rendered instead of the three
-     * columns while the web UI boots in workspace-window mode
-     * (?dshWindow=workspace). OCCUPIED by a workspace plugin (e.g.
-     * dsh-workspace) that owns the whole window layout. The owner receives a
-     * renderConversation bridge so it can place the original conversation
-     * (ui-conversation's ConversationRoot) anywhere in its own layout.
-     */
-    'workspace.shell': { kind: 'single'; scope: 'root'; owner: WorkspaceShellOwnerProps }
   }
 }
 
@@ -131,8 +99,6 @@ export interface SidebarOwnerProps {
   collapsed: boolean
   /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */
   width: number
-  /** Active sidebar view: the default workspace browser or the workbench file tree. */
-  view: 'default' | 'workbench'
 }
 
 /** Conversation owner share: business state and actions belong to the registrant. */
@@ -140,25 +106,6 @@ export interface ConvOwnerProps {}
 
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
-
-/** Workbench viewer owner share: empty — sessionId arrives as a framework-standard prop. */
-export interface WorkbenchViewerOwnerProps {}
-
-/** Workbench bottom owner share: the frame's rendered bottom height. */
-export interface WorkbenchBottomOwnerProps {
-  /** Rendered bottom-panel height in px. */
-  height: number
-}
-
-/** Workspace shell owner share: the conversation render bridge for the detached window. */
-export interface WorkspaceShellOwnerProps {
-  /**
-   * Render the original conversation (ui-conversation's ConversationRoot)
-   * into the caller's own layout. Safe to call at most once per render.
-   */
-  renderConversation(): ReactNode
-}
-
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
 export const inject = ['slots', 'theme', 'locale']
@@ -180,10 +127,7 @@ export function apply(ctx: ClientContext): void {
         'sidebar': { kind: 'single', scope: 'root' },
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
-        'workbench.viewer': { kind: 'single', scope: 'root' },
-        'workbench.bottom': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
-        'workspace.shell': { kind: 'single', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
       // entry and delivers useStore/actions to AppFrame as standard props.

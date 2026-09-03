@@ -18,8 +18,9 @@ const COLUMN_HEIGHT = 600
 const t: SidebarRootComponentProps['t'] = key => (en as Record<string, string>)[key] ?? key
 /** The shell never reads the global hooks; the props share carries them regardless. */
 const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
-const noAttention = new Map()
-const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention as never)
+type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSessionPendingInteraction']>[0]>[0]
+const noAttention: AttentionSnapshot = new Map()
+const useSessionPendingInteraction: SidebarRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
 
 afterEach(() => {
   cleanup()
@@ -33,13 +34,9 @@ afterEach(() => {
 function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   const view = render(
     <SidebarRoot
-      collapsed={false} width={300} view="default"
-      useSessions={neverHook} useWorkspaces={neverHook}
-      useSessionPendingInteraction={useSessionPendingInteraction}
-      startSession={vi.fn()} toggleSidebar={vi.fn()}
-      setSidebarView={vi.fn()}
-      workbenchAvailable={() => false} subscribeWorkbench={() => () => {}}
-      t={t}
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction} useWorkspaces={neverHook}
+      startSession={vi.fn()} toggleSidebar={vi.fn()} t={t}
       renderSlot={((_key: string, owner: SidebarSectionOwnerProps) =>
         <div data-testid="region" data-wide={owner.wide} />) as SidebarRootComponentProps['renderSlot']}
     />,

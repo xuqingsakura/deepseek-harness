@@ -1,4 +1,4 @@
-/** Sidebar shell slot registration and its plain runtime/layout callbacks. */
+/** Sidebar shell slot registration and its Session/layout callbacks. */
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -10,12 +10,10 @@ import { apply as hostApply } from '../src/index.ts'
 async function bench(declare = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
-  const layout = { toggleSidebar: vi.fn(), openWorkbench: vi.fn(), closeWorkbench: vi.fn(), setSidebarView: vi.fn() }
-  const workspaces = { startSession: vi.fn() }
-  const sessions = { open: vi.fn(), clear: vi.fn() }
+  const layout = { toggleSidebar: vi.fn() }
+  const uiWorkspace = { startSession: vi.fn() }
   ctx.provide('layout', layout)
-  ctx.provide('sessions', sessions as never)
-  ctx.provide('workspaces', workspaces as never)
+  ctx.provide('uiWorkspace', uiWorkspace as never)
   ctx.provide('locale', new LocaleRuntime(ctx))
   const slots = ctx.get('slots') as SlotRegistry
   if (declare) {
@@ -24,7 +22,7 @@ async function bench(declare = true) {
       () => null,
     )
   }
-  return { ctx, slots, layout, workspaces, sessions }
+  return { ctx, slots, layout, uiWorkspace }
 }
 
 describe('ui-sidebar apply', () => {
@@ -33,7 +31,7 @@ describe('ui-sidebar apply', () => {
   })
 
   it('declares only the services it uses', () => {
-    expect(inject).toEqual(['slots', 'layout', 'sessions', 'workspaces', 'locale'])
+    expect(inject).toEqual(['slots', 'layout', 'uiWorkspace', 'locale'])
   })
 
   it('registers the shell and declares its child seats', async () => {
@@ -43,22 +41,19 @@ describe('ui-sidebar apply', () => {
     expect(b.slots.spec('sidebar.brand.mark')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.brand.name')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.workspaces')).toEqual({ kind: 'single', scope: 'root' })
-    expect(b.slots.spec('sidebar.workbench')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.settings')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.footer.action')).toEqual({ kind: 'list', scope: 'root' })
     // Copy rides the standard locale seat, not the inject face.
     expect(b.slots.entries('sidebar')[0]!.locale).toBe('sidebar')
     const injected = (b.slots.entries('sidebar')[0]!.inject as () => SidebarRootInjected)()
-    expect(Object.keys(injected)).toEqual(['startSession', 'toggleSidebar', 'setSidebarView', 'workbenchAvailable', 'subscribeWorkbench'])
-    // Both arms delegate to the runtime's shared New Session action.
+    expect(Object.keys(injected)).toEqual(['startSession', 'toggleSidebar'])
+    // Both arms delegate to the Workspace UI's shared New Session action.
     injected.startSession('workspace' as never)
-    expect(b.workspaces.startSession).toHaveBeenCalledWith('workspace')
+    expect(b.uiWorkspace.startSession).toHaveBeenCalledWith('workspace')
     injected.startSession()
-    expect(b.workspaces.startSession).toHaveBeenLastCalledWith(undefined)
+    expect(b.uiWorkspace.startSession).toHaveBeenLastCalledWith(undefined)
     injected.toggleSidebar()
     expect(b.layout.toggleSidebar).toHaveBeenCalledOnce()
-    injected.setSidebarView('workbench')
-    expect(b.layout.setSidebarView).toHaveBeenCalledWith('workbench')
   })
 
   it('fails when no live owner declared the sidebar slot', async () => {

@@ -6,55 +6,37 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
   style="display: contents;"
 >
   <div
-    class="root fading quietBars"
-    style="width: 300px;"
+    class="root collapsed railIn quietBars"
+    style=""
   >
     <div
-      class="activityBar"
+      class="logoRow"
     >
       <button
         aria-label="Open sidebar"
-        class="brandButton"
+        class="iconButton toggle"
         type="button"
       >
-        <svg
+        <span
           aria-hidden="true"
-          class="brandFish"
-          data-content="965fe321"
-          fill="none"
-          height="17.6580310880829"
-          viewBox="0 0 23.16 17.04"
-          width="24"
-        />
-      </button>
-      <div
-        class="activityIcons"
-      >
-        <button
-          aria-current="true"
-          aria-label="Workspaces"
-          class="activityIcon activityIconActive"
-          type="button"
+          class="railMark"
         >
-          <svg
-            data-content="c0ce4dcc"
-            fill="none"
-            height="18"
-            viewBox="0 0 16 16"
-            width="18"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </button>
-      </div>
-      <div
-        class="activitySpacer"
-      />
-      <button
-        aria-label="Open sidebar"
-        class="activityIcon"
-        type="button"
-      >
+          <div
+            data-slot="sidebar.brand.mark"
+            style="display: contents;"
+          >
+            <svg
+              aria-hidden="true"
+              data-content="965fe321"
+              fill="none"
+              height="17.6580310880829"
+              viewBox="0 0 23.16 17.04"
+              width="24"
+            />
+          </div>
+        </span>
         <svg
+          class="panelIcon"
           data-content="35f95b0c"
           fill="none"
           height="18"
@@ -63,61 +45,47 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
           xmlns="http://www.w3.org/2000/svg"
         />
       </button>
+    </div>
+    <button
+      aria-label="New session"
+      class="newSession"
+      type="button"
+    >
+      <svg
+        data-content="c0ce4dcc"
+        fill="none"
+        height="18"
+        viewBox="0 0 16 16"
+        width="18"
+        xmlns="http://www.w3.org/2000/svg"
+      />
+    </button>
+    <div
+      class="regionArea"
+    >
       <div
-        data-slot="sidebar.settings"
+        data-slot="sidebar.workspaces"
         style="display: contents;"
       />
     </div>
     <div
-      class="panel"
+      class="footArea"
     >
       <div
-        class="panelHeader"
-      >
-        <span
-          class="panelTitle"
-        >
-          Workspaces
-        </span>
-      </div>
-      <button
-        aria-label="New session"
-        class="newSession"
-        type="button"
-      >
-        <svg
-          data-content="c0ce4dcc"
-          fill="none"
-          height="14"
-          viewBox="0 0 16 16"
-          width="14"
-          xmlns="http://www.w3.org/2000/svg"
-        />
-        <span
-          class="newSessionLabel"
-        >
-          New Session
-        </span>
-      </button>
-      <div
-        class="regionArea"
+        class="footerActions"
       >
         <div
-          data-slot="sidebar.workspaces"
+          data-slot="sidebar.footer.action"
           style="display: contents;"
         />
       </div>
       <div
-        class="footArea"
+        class="settingsArea"
       >
         <div
-          class="footerActions"
-        >
-          <div
-            data-slot="sidebar.footer.action"
-            style="display: contents;"
-          />
-        </div>
+          data-slot="sidebar.settings"
+          style="display: contents;"
+        />
       </div>
     </div>
   </div>
@@ -134,114 +102,120 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
     style="width: 300px;"
   >
     <div
-      class="activityBar"
+      class="logoRow"
     >
       <button
-        aria-label="Collapse sidebar"
-        class="brandButton"
+        aria-label="New session"
+        class="brand wide"
         type="button"
       >
-        <svg
+        <span
           aria-hidden="true"
-          class="brandFish"
-          data-content="965fe321"
-          fill="none"
-          height="17.6580310880829"
-          viewBox="0 0 23.16 17.04"
-          width="24"
-        />
-      </button>
-      <div
-        class="activityIcons"
-      >
-        <button
-          aria-current="true"
-          aria-label="Workspaces"
-          class="activityIcon activityIconActive"
-          type="button"
+          class="brandIdentity"
         >
-          <svg
-            data-content="c0ce4dcc"
-            fill="none"
-            height="18"
-            viewBox="0 0 16 16"
-            width="18"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </button>
-      </div>
-      <div
-        class="activitySpacer"
-      />
+          <span
+            class="brandMark"
+          >
+            <div
+              data-slot="sidebar.brand.mark"
+              style="display: contents;"
+            >
+              <svg
+                aria-hidden="true"
+                data-content="965fe321"
+                fill="none"
+                height="17.6580310880829"
+                viewBox="0 0 23.16 17.04"
+                width="24"
+              />
+            </div>
+          </span>
+          <span
+            class="brandName"
+          >
+            <div
+              data-slot="sidebar.brand.name"
+              style="display: contents;"
+            >
+              <span
+                class="localBuildBrand"
+              >
+                <span
+                  class="localBuildTitle"
+                >
+                  DSH Local Build
+                </span>
+                <span
+                  class="buildVersion"
+                >
+                  1.2.3-rc.4-abc1234-dirty
+                </span>
+              </span>
+            </div>
+          </span>
+        </span>
+      </button>
       <button
         aria-label="Collapse sidebar"
-        class="activityIcon"
+        class="iconButton toggle"
         type="button"
       >
         <svg
+          class="panelIcon"
           data-content="35f95b0c"
           fill="none"
-          height="18"
+          height="16"
           viewBox="0 0 16 16"
-          width="18"
+          width="16"
           xmlns="http://www.w3.org/2000/svg"
         />
       </button>
+    </div>
+    <button
+      aria-label="New session"
+      class="newSession"
+      type="button"
+    >
+      <svg
+        data-content="c0ce4dcc"
+        fill="none"
+        height="14"
+        viewBox="0 0 16 16"
+        width="14"
+        xmlns="http://www.w3.org/2000/svg"
+      />
+      <span
+        class="newSessionLabel wide"
+      >
+        New Session
+      </span>
+    </button>
+    <div
+      class="regionArea"
+    >
       <div
-        data-slot="sidebar.settings"
+        data-slot="sidebar.workspaces"
         style="display: contents;"
       />
     </div>
     <div
-      class="panel"
+      class="footArea"
     >
       <div
-        class="panelHeader"
-      >
-        <span
-          class="panelTitle"
-        >
-          Workspaces
-        </span>
-      </div>
-      <button
-        aria-label="New session"
-        class="newSession"
-        type="button"
-      >
-        <svg
-          data-content="c0ce4dcc"
-          fill="none"
-          height="14"
-          viewBox="0 0 16 16"
-          width="14"
-          xmlns="http://www.w3.org/2000/svg"
-        />
-        <span
-          class="newSessionLabel"
-        >
-          New Session
-        </span>
-      </button>
-      <div
-        class="regionArea"
+        class="footerActions"
       >
         <div
-          data-slot="sidebar.workspaces"
+          data-slot="sidebar.footer.action"
           style="display: contents;"
         />
       </div>
       <div
-        class="footArea"
+        class="settingsArea"
       >
         <div
-          class="footerActions"
-        >
-          <div
-            data-slot="sidebar.footer.action"
-            style="display: contents;"
-          />
-        </div>
+          data-slot="sidebar.settings"
+          style="display: contents;"
+        />
       </div>
     </div>
   </div>
@@ -258,114 +232,120 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
     style="width: 300px;"
   >
     <div
-      class="activityBar"
+      class="logoRow"
     >
       <button
-        aria-label="收起侧边栏"
-        class="brandButton"
+        aria-label="新建会话"
+        class="brand wide"
         type="button"
       >
-        <svg
+        <span
           aria-hidden="true"
-          class="brandFish"
-          data-content="965fe321"
-          fill="none"
-          height="17.6580310880829"
-          viewBox="0 0 23.16 17.04"
-          width="24"
-        />
-      </button>
-      <div
-        class="activityIcons"
-      >
-        <button
-          aria-current="true"
-          aria-label="工作区"
-          class="activityIcon activityIconActive"
-          type="button"
+          class="brandIdentity"
         >
-          <svg
-            data-content="c0ce4dcc"
-            fill="none"
-            height="18"
-            viewBox="0 0 16 16"
-            width="18"
-            xmlns="http://www.w3.org/2000/svg"
-          />
-        </button>
-      </div>
-      <div
-        class="activitySpacer"
-      />
+          <span
+            class="brandMark"
+          >
+            <div
+              data-slot="sidebar.brand.mark"
+              style="display: contents;"
+            >
+              <svg
+                aria-hidden="true"
+                data-content="965fe321"
+                fill="none"
+                height="17.6580310880829"
+                viewBox="0 0 23.16 17.04"
+                width="24"
+              />
+            </div>
+          </span>
+          <span
+            class="brandName"
+          >
+            <div
+              data-slot="sidebar.brand.name"
+              style="display: contents;"
+            >
+              <span
+                class="localBuildBrand"
+              >
+                <span
+                  class="localBuildTitle"
+                >
+                  DSH 本地构建
+                </span>
+                <span
+                  class="buildVersion"
+                >
+                  1.2.3-rc.4-abc1234-dirty
+                </span>
+              </span>
+            </div>
+          </span>
+        </span>
+      </button>
       <button
         aria-label="收起侧边栏"
-        class="activityIcon"
+        class="iconButton toggle"
         type="button"
       >
         <svg
+          class="panelIcon"
           data-content="35f95b0c"
           fill="none"
-          height="18"
+          height="16"
           viewBox="0 0 16 16"
-          width="18"
+          width="16"
           xmlns="http://www.w3.org/2000/svg"
         />
       </button>
+    </div>
+    <button
+      aria-label="新建会话"
+      class="newSession"
+      type="button"
+    >
+      <svg
+        data-content="c0ce4dcc"
+        fill="none"
+        height="14"
+        viewBox="0 0 16 16"
+        width="14"
+        xmlns="http://www.w3.org/2000/svg"
+      />
+      <span
+        class="newSessionLabel wide"
+      >
+        新会话
+      </span>
+    </button>
+    <div
+      class="regionArea"
+    >
       <div
-        data-slot="sidebar.settings"
+        data-slot="sidebar.workspaces"
         style="display: contents;"
       />
     </div>
     <div
-      class="panel"
+      class="footArea"
     >
       <div
-        class="panelHeader"
-      >
-        <span
-          class="panelTitle"
-        >
-          工作区
-        </span>
-      </div>
-      <button
-        aria-label="新建会话"
-        class="newSession"
-        type="button"
-      >
-        <svg
-          data-content="c0ce4dcc"
-          fill="none"
-          height="14"
-          viewBox="0 0 16 16"
-          width="14"
-          xmlns="http://www.w3.org/2000/svg"
-        />
-        <span
-          class="newSessionLabel"
-        >
-          新会话
-        </span>
-      </button>
-      <div
-        class="regionArea"
+        class="footerActions"
       >
         <div
-          data-slot="sidebar.workspaces"
+          data-slot="sidebar.footer.action"
           style="display: contents;"
         />
       </div>
       <div
-        class="footArea"
+        class="settingsArea"
       >
         <div
-          class="footerActions"
-        >
-          <div
-            data-slot="sidebar.footer.action"
-            style="display: contents;"
-          />
-        </div>
+          data-slot="sidebar.settings"
+          style="display: contents;"
+        />
       </div>
     </div>
   </div>
