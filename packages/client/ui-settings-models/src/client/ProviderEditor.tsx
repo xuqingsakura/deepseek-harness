@@ -248,10 +248,21 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const ns = namespace.ns
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
-    const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
+    let next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
       && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
       ? schema.setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
+    // A custom pi-ai route that names an endpoint and at least one model but no
+    // wire protocol defaults to OpenAI Chat Completions - the same protocol the
+    // discovery probes by default. A route whose endpoint speaks something else
+    // names it in this card and overrides the default.
+    if (layout === 'pi-ai' && stringAt(next, 'api') === undefined) {
+      const models = schema.getPath(next, ['models'])
+      const baseURL = stringAt(next, 'baseURL')
+      if (Array.isArray(models) && models.length > 0 && baseURL !== undefined) {
+        next = schema.setPath(next, ['api'], 'openai-completions')
+      }
+    }
     if (props.credentialOnly !== true) {
       // The same checker gates the submit button, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse

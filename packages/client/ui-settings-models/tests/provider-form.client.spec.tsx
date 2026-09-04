@@ -273,7 +273,13 @@ describe('model list editing', () => {
     expect(firstMutate(mutate)).toMatchObject({
       ns: 'llm-pi-ai',
       expectedRevision: 3,
-      ops: [{ op: 'set', path: ['providers', 'openai', 'models'], value: [{ id: 'acme-large', contextWindow: 65_536 }] }],
+      ops: [
+        { op: 'set', path: ['providers', 'openai', 'models'], value: [{ id: 'acme-large', contextWindow: 65_536 }] },
+        // A custom pi-ai route that names an endpoint and models but no wire
+        // protocol defaults to OpenAI Chat Completions, so saving it never
+        // yields the host's "needs an api" rejection.
+        { op: 'set', path: ['providers', 'openai', 'api'], value: 'openai-completions' },
+      ],
     })
   })
 
